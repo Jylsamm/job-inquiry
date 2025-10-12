@@ -1,8 +1,4 @@
 <?php
-/**
- * WorkConnect PH - Authentication API
- * Handles login, register, logout, and session check
- */
 
 require_once '../includes/config.php';
 
