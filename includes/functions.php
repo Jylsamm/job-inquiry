@@ -79,7 +79,6 @@ function getEmployerJobs($employer_id) {
     return $jobs;
 }
 
-
 /**
  * Search jobs with filters
  * @param array $filters
@@ -313,5 +312,375 @@ function getUserNotifications($user_id, $limit = 10) {
     }
     
     return $notifications;
+}
+
+// =============================================
+// NEW: Profile Management Functions
+// =============================================
+
+/**
+ * Get job seeker profile details
+ * @param int $user_id
+ * @return array|null
+ */
+function getJobSeekerProfile($user_id) {
+    $conn = getDBConnection();
+    $stmt = $conn->prepare("
+        SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
+               js.headline, js.bio, js.location, js.expected_salary, js.experience_level
+        FROM users u
+        JOIN job_seeker js ON u.user_id = js.user_id
+        WHERE u.user_id = ?
+    ");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
+}
+
+/**
+ * Save job seeker profile details
+ * @param int $user_id
+ * @param array $data
+ * @return array
+ */
+function saveJobSeekerProfile($user_id, $data) {
+    $conn = getDBConnection();
+    
+    // 1. Update User table
+    $user_stmt = $conn->prepare("
+        UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
+    ");
+    $user_stmt->bind_param("ssssi", 
+        $data['first_name'], 
+        $data['last_name'], 
+        $data['email'], 
+        $data['phone'], 
+        $user_id
+    );
+    $user_stmt->execute();
+    
+    // 2. Update Job Seeker table
+    $js_stmt = $conn->prepare("
+        UPDATE job_seeker SET headline = ?, bio = ?, location = ?, expected_salary = ? 
+        WHERE user_id = ?
+    ");
+    $js_stmt->bind_param("sssdi", 
+        $data['headline'], 
+        $data['bio'], 
+        $data['location'], 
+        $data['expected_salary'], 
+        $user_id
+    );
+    
+    if ($js_stmt->execute()) {
+        return ['success' => true, 'message' => 'Job Seeker profile updated successfully.'];
+    } else {
+        return ['success' => false, 'message' => 'Failed to update job seeker profile.'];
+    }
+}
+
+/**
+ * Get employer profile details
+ * @param int $user_id
+ * @return array|null
+ */
+function getEmployerProfile($user_id) {
+    $conn = getDBConnection();
+    $stmt = $conn->prepare("
+        SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
+               e.company_name, e.company_description, e.industry, e.website_url, e.company_logo, e.company_size
+        FROM users u
+        JOIN employer e ON u.user_id = e.user_id
+        WHERE u.user_id = ?
+    ");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
+}
+
+/**
+ * Save employer profile details
+ * @param int $user_id
+ * @param array $data
+ * @return array
+ */
+function saveEmployerProfile($user_id, $data) {
+    $conn = getDBConnection();
+    
+    // 1. Update User table (for contact person details)
+    $user_stmt = $conn->prepare("
+        UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
+    ");
+    $user_stmt->bind_param("ssssi", 
+        $data['first_name'], 
+        $data['last_name'], 
+        $data['email'], 
+        $data['phone'], 
+        $user_id
+    );
+    $user_stmt->execute();
+    
+    // 2. Update Employer table
+    $emp_stmt = $conn->prepare("
+        UPDATE employer SET company_name = ?, company_description = ?, industry = ?, website_url = ? 
+        WHERE user_id = ?
+    ");
+    $emp_stmt->bind_param("ssssi", 
+        $data['company_name'], 
+        $data['company_description'], 
+        $data['industry'], 
+        $data['website_url'], 
+        $user_id
+    );
+    
+    if ($emp_stmt->execute()) {
+        return ['success' => true, 'message' => 'Employer profile updated successfully.'];
+    } else {
+        return ['success' => false, 'message' => 'Failed to update employer profile.'];
+    }
+}
+
+// =============================================
+// NEW: File Upload and Validation Functions
+// =============================================
+
+/**
+ * Upload profile picture with validation
+ * @param array $file
+ * @param int $user_id
+ * @return array
+ */
+function uploadProfilePicture($file, $user_id) {
+    // Validate file
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'File upload failed.'];
+    }
+    
+    // Check file size (max 2MB)
+    if ($file['size'] > 2097152) {
+        return ['success' => false, 'message' => 'File size must be less than 2MB.'];
+    }
+    
+    // Check file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+    $file_type = mime_content_type($file['tmp_name']);
+    if (!in_array($file_type, $allowed_types)) {
+        return ['success' => false, 'message' => 'Only JPG, PNG, and GIF images are allowed.'];
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = 'profile_' . $user_id . '_' . time() . '.' . $extension;
+    $upload_path = UPLOAD_PATH . 'profiles/';
+    
+    // Create directory if it doesn't exist
+    if (!is_dir($upload_path)) {
+        mkdir($upload_path, 0755, true);
+    }
+    
+    $full_path = $upload_path . $filename;
+    
+    // Move uploaded file
+    if (move_uploaded_file($file['tmp_name'], $full_path)) {
+        // Update database with relative path
+        $relative_path = '/job-inquiry/uploads/profiles/' . $filename;
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("UPDATE users SET profile_picture = ? WHERE user_id = ?");
+        $stmt->bind_param("si", $relative_path, $user_id);
+        
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Profile picture updated.', 'file_path' => $relative_path];
+        } else {
+            return ['success' => false, 'message' => 'Failed to update database.'];
+        }
+    } else {
+        return ['success' => false, 'message' => 'Failed to save file.'];
+    }
+}
+
+/**
+ * Upload company logo with validation
+ * @param array $file
+ * @param int $employer_id
+ * @return array
+ */
+function uploadCompanyLogo($file, $employer_id) {
+    // Validate file
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'File upload failed.'];
+    }
+    
+    // Check file size (max 2MB)
+    if ($file['size'] > 2097152) {
+        return ['success' => false, 'message' => 'File size must be less than 2MB.'];
+    }
+    
+    // Check file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+    $file_type = mime_content_type($file['tmp_name']);
+    if (!in_array($file_type, $allowed_types)) {
+        return ['success' => false, 'message' => 'Only JPG, PNG, and GIF images are allowed.'];
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = 'company_' . $employer_id . '_' . time() . '.' . $extension;
+    $upload_path = UPLOAD_PATH . 'companies/';
+    
+    // Create directory if it doesn't exist
+    if (!is_dir($upload_path)) {
+        mkdir($upload_path, 0755, true);
+    }
+    
+    $full_path = $upload_path . $filename;
+    
+    // Move uploaded file
+    if (move_uploaded_file($file['tmp_name'], $full_path)) {
+        // Update database with relative path
+        $relative_path = '/job-inquiry/uploads/companies/' . $filename;
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("UPDATE employer SET company_logo = ? WHERE employer_id = ?");
+        $stmt->bind_param("si", $relative_path, $employer_id);
+        
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Company logo updated.', 'file_path' => $relative_path];
+        } else {
+            return ['success' => false, 'message' => 'Failed to update database.'];
+        }
+    } else {
+        return ['success' => false, 'message' => 'Failed to save file.'];
+    }
+}
+
+/**
+ * Validate email format and uniqueness
+ * @param string $email
+ * @param int $current_user_id
+ * @return array
+ */
+function validateEmail($email, $current_user_id = null) {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['valid' => false, 'message' => 'Please enter a valid email address.'];
+    }
+    
+    $conn = getDBConnection();
+    
+    if ($current_user_id) {
+        // Check if email exists for other users (for profile updates)
+        $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+        $stmt->bind_param("si", $email, $current_user_id);
+    } else {
+        // Check if email exists (for registration)
+        $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        return ['valid' => false, 'message' => 'This email address is already registered.'];
+    }
+    
+    return ['valid' => true, 'message' => 'Email is valid.'];
+}
+
+/**
+ * Get user statistics for dashboard
+ * @param int $user_id
+ * @param string $user_role
+ * @return array
+ */
+function getUserStatistics($user_id, $user_role) {
+    $conn = getDBConnection();
+    $stats = [];
+    
+    if ($user_role === 'job_seeker') {
+        // Job seeker stats
+        $stmt = $conn->prepare("
+            SELECT 
+                (SELECT COUNT(*) FROM application WHERE job_seeker_id = ?) as total_applications,
+                (SELECT COUNT(*) FROM application WHERE job_seeker_id = ? AND status = 'pending') as pending_applications,
+                (SELECT COUNT(*) FROM application WHERE job_seeker_id = ? AND status = 'accepted') as accepted_applications
+        ");
+        $stmt->bind_param("iii", $user_id, $user_id, $user_id);
+        $stmt->execute();
+        $stats = $stmt->get_result()->fetch_assoc();
+        
+    } elseif ($user_role === 'employer') {
+        // Employer stats
+        $employer_id = getCurrentEmployerId();
+        $stmt = $conn->prepare("
+            SELECT 
+                (SELECT COUNT(*) FROM job WHERE employer_id = ?) as total_jobs,
+                (SELECT COUNT(*) FROM job WHERE employer_id = ? AND status = 'published') as active_jobs,
+                (SELECT COUNT(*) FROM application a 
+                 JOIN job j ON a.job_id = j.job_id 
+                 WHERE j.employer_id = ?) as total_applications
+        ");
+        $stmt->bind_param("iii", $employer_id, $employer_id, $employer_id);
+        $stmt->execute();
+        $stats = $stmt->get_result()->fetch_assoc();
+    }
+    
+    return $stats;
+}
+
+/**
+ * Get recent activities for user
+ * @param int $user_id
+ * @param string $user_role
+ * @param int $limit
+ * @return array
+ */
+function getRecentActivities($user_id, $user_role, $limit = 5) {
+    $conn = getDBConnection();
+    $activities = [];
+    
+    if ($user_role === 'job_seeker') {
+        $stmt = $conn->prepare("
+            SELECT 
+                a.applied_at as activity_date,
+                CONCAT('Applied for ', j.job_title) as activity_description,
+                'application' as activity_type
+            FROM application a
+            JOIN job j ON a.job_id = j.job_id
+            WHERE a.job_seeker_id = ?
+            ORDER BY a.applied_at DESC
+            LIMIT ?
+        ");
+        $stmt->bind_param("ii", $user_id, $limit);
+        
+    } elseif ($user_role === 'employer') {
+        $employer_id = getCurrentEmployerId();
+        $stmt = $conn->prepare("
+            SELECT 
+                j.created_at as activity_date,
+                CONCAT('Posted job: ', j.job_title) as activity_description,
+                'job_post' as activity_type
+            FROM job j
+            WHERE j.employer_id = ?
+            UNION
+            SELECT 
+                a.applied_at as activity_date,
+                CONCAT('New application for ', j.job_title) as activity_description,
+                'new_application' as activity_type
+            FROM application a
+            JOIN job j ON a.job_id = j.job_id
+            WHERE j.employer_id = ?
+            ORDER BY activity_date DESC
+            LIMIT ?
+        ");
+        $stmt->bind_param("iii", $employer_id, $employer_id, $limit);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    while ($row = $result->fetch_assoc()) {
+        $activities[] = $row;
+    }
+    
+    return $activities;
 }
 ?>
