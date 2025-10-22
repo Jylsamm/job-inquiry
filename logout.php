@@ -3,5 +3,5 @@ require_once 'includes/config.php';
 require_once 'includes/auth.php';
 
 logoutUser();
-redirect('home.php');
+redirect('index.php');
 ?>

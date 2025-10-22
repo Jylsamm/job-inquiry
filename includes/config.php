@@ -1,7 +1,6 @@
 <?php
 /**
- * WorkConnect PH - Database Configuration
- * MySQLi Connection for XAMPP Environment
+ * WorkConnect PH - Enhanced Database Configuration with Security
  */
 
 // Database configuration
@@ -16,19 +15,53 @@ define('APP_NAME', 'WorkConnect PH');
 define('APP_URL', 'http://localhost/job-inquiry');
 define('UPLOAD_PATH', $_SERVER['DOCUMENT_ROOT'] . '/job-inquiry/uploads/');
 
-// Start session
+// Security configuration
+define('CSRF_TOKEN_EXPIRY', 3600); // 1 hour
+
+// Enhanced session security
+// Configure session cookie params. Strip any port from the host to avoid invalid domain values.
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$cookie_domain = $host ? preg_replace('/:\d+$/', '', $host) : '';
+$is_secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+session_set_cookie_params([
+    'lifetime' => 86400, // 24 hours
+    'path' => '/',
+    // Use host without port (empty string will result in host-only cookie)
+    'domain' => $cookie_domain,
+    'secure' => $is_secure, // Only over HTTPS when available
+    'httponly' => true, // Prevent JavaScript access
+    // Use Lax to allow top-level navigations to carry the cookie while still providing CSRF protection
+    'samesite' => 'Lax'
+]);
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Regenerate session ID to prevent fixation
+if (!isset($_SESSION['created'])) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+} elseif (time() - $_SESSION['created'] > 1800) {
+    // Regenerate every 30 minutes
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+}
+
 // Error reporting (disable in production)
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if ($_SERVER['HTTP_HOST'] === 'localhost' || $_SERVER['HTTP_HOST'] === '127.0.0.1') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    // Production
+    error_reporting(E_ALL);
+    ini_set('display_errors', 0);
+    ini_set('log_errors', 1);
+    ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
+}
 
 /**
- * Database connection function
- * @return mysqli
- * @throws Exception if connection fails
+ * Database connection function with enhanced error handling
  */
 function getDBConnection() {
     static $conn = null;
@@ -38,7 +71,6 @@ function getDBConnection() {
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             
             if ($conn->connect_error) {
-                // If the connection fails, it throws an exception to handle the error cleanly below.
                 throw new Exception("Database connection failed: " . $conn->connect_error);
             }
             
@@ -46,25 +78,20 @@ function getDBConnection() {
         } catch (Exception $e) {
             error_log("Database Error: " . $e->getMessage());
             
-            // --- FIX: Robust API Detection for JSON Error Handling ---
-            // Check if the script is being called via the API directory structure.
+            // Robust API Detection for JSON Error Handling
             $is_api_call = isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/api/') !== false;
 
             if ($is_api_call) {
-                // For API calls, return a JSON error response (HTTP 500) and terminate cleanly.
                 header('Content-Type: application/json');
                 http_response_code(500);
                 die(json_encode([
                     'success' => false,
-                    'message' => 'Internal Server Error: Database connection failed. Please ensure MySQL is running.'
+                    'message' => 'Internal Server Error: Database connection failed.'
                 ]));
             }
-            // --- END FIX ---
             
             // Show user-friendly HTML error for non-API pages
             if (php_sapi_name() !== 'cli') {
-                // This die outputs the HTML that was causing the parsing error on the API side.
-                // It is kept for standard PHP pages.
                 die("
                     <div style='padding: 20px; background: #f8d7da; color: #721c24; border-radius: 5px; margin: 20px;'>
                         <h3>Database Connection Error</h3>
@@ -87,66 +114,100 @@ function getDBConnection() {
 }
 
 /**
- * Secure input data
- * @param string $data
- * @return string
+ * CSRF Token Generation and Validation
+ */
+function generateCsrfToken() {
+    if (empty($_SESSION['csrf_token']) || empty($_SESSION['csrf_token_time']) || 
+        (time() - $_SESSION['csrf_token_time']) > CSRF_TOKEN_EXPIRY) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_time'] = time();
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function validateCsrfToken($token) {
+    if (empty($_SESSION['csrf_token']) || empty($_SESSION['csrf_token_time'])) {
+        return false;
+    }
+    
+    // Check token expiration
+    if ((time() - $_SESSION['csrf_token_time']) > CSRF_TOKEN_EXPIRY) {
+        unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+        return false;
+    }
+    
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Secure input data with prepared statement compatibility
  */
 function sanitizeInput($data) {
-    // Calling getDBConnection() here ensures the connection attempt happens early.
-    $conn = getDBConnection();
+    if (is_array($data)) {
+        return array_map('sanitizeInput', $data);
+    }
+    
     $data = trim($data);
     $data = stripslashes($data);
-    $data = htmlspecialchars($data);
-    return $conn->real_escape_string($data);
+    $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+    return $data;
+}
+
+/**
+ * Enhanced input validation
+ */
+function validateEmail($email) {
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function validatePassword($password) {
+    return strlen($password) >= 8;
+}
+
+function validatePhone($phone) {
+    return preg_match('/^\+?[\d\s\-\(\)]{10,}$/', $phone);
 }
 
 /**
  * JSON response helper
- * @param bool $success
- * @param string $message
- * @param mixed $data
  */
-function jsonResponse($success, $message = '', $data = null) {
-    // This is defined here because api/auth.php uses it to ensure clean JSON output.
+function jsonResponse($success, $message = '', $data = null, $httpCode = 200) {
     if (!headers_sent()) {
+        http_response_code($httpCode);
         header('Content-Type: application/json');
     }
-    echo json_encode([
+    
+    $response = [
         'success' => $success,
         'message' => $message,
-        'data' => $data
-    ]);
+        'data' => $data,
+        'timestamp' => time()
+    ];
+    
+    // Include CSRF token for forms if requested
+    if ($success && isset($_GET['include_csrf'])) {
+        $response['csrf_token'] = generateCsrfToken();
+    }
+    
+    echo json_encode($response);
     exit;
 }
 
 /**
- * Check if user is logged in
- * @return bool
+ * Authentication functions
  */
 function isLoggedIn() {
     return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
 }
 
-/**
- * Get current user role
- * @return string|null
- */
 function getCurrentUserRole() {
     return $_SESSION['user_role'] ?? null;
 }
 
-/**
- * Get current user ID
- * @return int|null
- */
 function getCurrentUserId() {
     return $_SESSION['user_id'] ?? null;
 }
 
-/**
- * Get current job seeker ID
- * @return int|null
- */
 function getCurrentJobSeekerId() {
     if (!isLoggedIn() || getCurrentUserRole() !== 'job_seeker') return null;
     
@@ -159,10 +220,6 @@ function getCurrentJobSeekerId() {
     return $result->num_rows === 1 ? $result->fetch_assoc()['job_seeker_id'] : null;
 }
 
-/**
- * Get current employer ID
- * @return int|null
- */
 function getCurrentEmployerId() {
     if (!isLoggedIn() || getCurrentUserRole() !== 'employer') return null;
     
@@ -175,28 +232,15 @@ function getCurrentEmployerId() {
     return $result->num_rows === 1 ? $result->fetch_assoc()['employer_id'] : null;
 }
 
-/**
- * Redirect to specified page
- * @param string $page
- */
 function redirect($page) {
     header("Location: " . APP_URL . "/$page");
     exit;
 }
 
-/**
- * Check if user has specific role
- * @param string $role
- * @return bool
- */
 function hasRole($role) {
     return isLoggedIn() && getCurrentUserRole() === $role;
 }
 
-/**
- * Require specific role for access
- * @param string $role
- */
 function requireRole($role) {
     if (!hasRole($role)) {
         header('HTTP/1.0 403 Forbidden');
@@ -204,12 +248,48 @@ function requireRole($role) {
     }
 }
 
-/**
- * Require authentication
- */
 function requireAuth() {
     if (!isLoggedIn()) {
         header('Location: login.php');
         exit;
     }
 }
+
+// Custom error handler
+function customErrorHandler($errno, $errstr, $errfile, $errline) {
+    error_log("Error [$errno]: $errstr in $errfile on line $errline");
+    
+    if ($_SERVER['HTTP_HOST'] === 'localhost' || $_SERVER['HTTP_HOST'] === '127.0.0.1') {
+        // Show errors in development
+        return false;
+    }
+    
+    // Don't show errors to users in production
+    return true;
+}
+set_error_handler('customErrorHandler');
+
+// Custom exception handler
+function customExceptionHandler($exception) {
+    error_log("Uncaught Exception: " . $exception->getMessage() . " in " . $exception->getFile() . " on line " . $exception->getLine());
+    
+    if (strpos($_SERVER['REQUEST_URI'], '/api/') !== false) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'An internal server error occurred.'
+        ]);
+    } else {
+        http_response_code(500);
+        echo "<h1>500 Internal Server Error</h1>";
+        if ($_SERVER['HTTP_HOST'] === 'localhost' || $_SERVER['HTTP_HOST'] === '127.0.0.1') {
+            echo "<p><strong>Error:</strong> " . $exception->getMessage() . "</p>";
+            echo "<p><strong>File:</strong> " . $exception->getFile() . "</p>";
+            echo "<p><strong>Line:</strong> " . $exception->getLine() . "</p>";
+        }
+    }
+    exit;
+}
+set_exception_handler('customExceptionHandler');
+?>

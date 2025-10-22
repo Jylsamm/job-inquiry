@@ -131,11 +131,12 @@ const Utils = {
             return false;
         }
 
-        const userRole = response.data.role;
+    // Handle cases where API returns either { data: { role: '...' } } or { data: 'role' }
+    const userRole = response.data && (typeof response.data === 'string' ? response.data : response.data.role);
         if (userRole !== requiredRole) {
-            // Logged in but wrong role, redirect to home
-            showNotification('Access Denied. You are not authorized for this page.', 'error');
-            window.location.href = 'home.php';
+                    // Logged in but wrong role, redirect to index
+                    showNotification('Access Denied. You are not authorized for this page.', 'error');
+                    window.location.href = 'index.php';
             return false;
         }
         
@@ -152,7 +153,7 @@ const Utils = {
     // Retrieves the user role from the API check
     getUserRole: async () => {
         const response = await apiCall(CONFIG.ENDPOINTS.AUTH.CHECK, {}, 'GET');
-        return response.data.role || null;
+    return response.data && (typeof response.data === 'string' ? response.data : response.data.role) || null;
     },
     
     // Utility to get PageManager (needs Modal component utility)
@@ -212,6 +213,45 @@ const Utils = {
     }
 };
 
+// --- Development-only API debug panel (shows last API response) ---
+function ensureApiDebugPanel() {
+    if (!CONFIG.DEBUG) return null;
+    let panel = document.getElementById('apiDebugPanel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'apiDebugPanel';
+    panel.style.position = 'fixed';
+    panel.style.right = '12px';
+    panel.style.bottom = '12px';
+    panel.style.zIndex = 99999;
+    panel.style.maxWidth = '420px';
+    panel.style.maxHeight = '320px';
+    panel.style.overflow = 'auto';
+    panel.style.background = 'rgba(0,0,0,0.85)';
+    panel.style.color = '#fff';
+    panel.style.padding = '10px';
+    panel.style.fontSize = '12px';
+    panel.style.borderRadius = '6px';
+    panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+    panel.innerText = 'API Debug Panel (development only)';
+    document.body.appendChild(panel);
+    return panel;
+}
+
+function updateApiDebugPanel(detail) {
+    if (!CONFIG.DEBUG) return;
+    const panel = ensureApiDebugPanel();
+    if (!panel) return;
+    try {
+        panel.innerText = JSON.stringify(detail, null, 2);
+    } catch (e) {
+        panel.innerText = String(detail);
+    }
+}
+
+// Expose to global for pages using PHP footer to update the debug panel
+window.updateApiDebugPanel = updateApiDebugPanel;
+
 // Global notification system (will be used by all pages)
 function showNotification(message, type = 'info') {
     const notification = document.getElementById('notification');
@@ -250,13 +290,45 @@ async function apiCall(endpoint, data = {}, method = 'POST') {
     try {
         const response = await fetch(`${CONFIG.API_BASE}/${endpoint}`, {
             method: method,
+            credentials: 'include', // include cookies for session
             headers: {
                 'Content-Type': 'application/json',
             },
             body: method !== 'GET' ? JSON.stringify(data) : null
         });
+        // If server returned non-2xx, try to parse error body and return structured error
+        if (!response.ok) {
+            let errorBody = null;
+            try {
+                errorBody = await response.json();
+            } catch (e) {
+                errorBody = await response.text();
+            }
+            const detail = { endpoint: endpoint, status: response.status, statusText: response.statusText, body: errorBody };
+            console.error('API Error Response:', detail);
+            updateApiDebugPanel(detail);
+            if (document.getElementById('loadingOverlay')) {
+                hideLoading();
+            }
+            return { success: false, message: (errorBody && errorBody.message) ? errorBody.message : `Server error ${response.status}` };
+        }
 
-        const result = await response.json();
+        // Parse valid JSON response
+        let result = null;
+        try {
+            result = await response.json();
+        } catch (e) {
+            // Response wasn't JSON
+            const text = await response.text();
+            const detail = { endpoint: endpoint, status: response.status, statusText: response.statusText, body: text };
+            console.error('Failed to parse JSON response for', endpoint, detail);
+            updateApiDebugPanel(detail);
+            if (document.getElementById('loadingOverlay')) {
+                hideLoading();
+            }
+            return { success: false, message: 'Invalid server response' };
+        }
+
         if (document.getElementById('loadingOverlay')) {
             hideLoading();
         }
@@ -265,8 +337,10 @@ async function apiCall(endpoint, data = {}, method = 'POST') {
         if (document.getElementById('loadingOverlay')) {
             hideLoading();
         }
+        const detail = { endpoint: endpoint, error: String(error) };
+        console.error('API Error:', detail);
+        updateApiDebugPanel(detail);
         showNotification('Network error. Please try again.', 'error');
-        console.error('API Error:', error);
         return { success: false, message: 'Network error' };
     }
 }

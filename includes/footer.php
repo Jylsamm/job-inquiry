@@ -55,17 +55,45 @@
         try {
             const response = await fetch(`api/${endpoint}`, {
                 method: method,
+                credentials: 'include', // ensure cookies (session) are sent
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: method !== 'GET' ? JSON.stringify(data) : null
             });
-            
-            const result = await response.json();
+
+            if (!response.ok) {
+                let errorBody = null;
+                try {
+                    errorBody = await response.json();
+                } catch (e) {
+                    errorBody = await response.text();
+                }
+                const detail = { endpoint: endpoint, status: response.status, statusText: response.statusText, body: errorBody };
+                console.error('API Error Response:', detail);
+                try { window.updateApiDebugPanel && window.updateApiDebugPanel(detail); } catch(e) {}
+                hideLoading();
+                return { success: false, message: (errorBody && errorBody.message) ? errorBody.message : `Server error ${response.status}` };
+            }
+
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (e) {
+                const text = await response.text();
+                const detail = { endpoint: endpoint, status: response.status, statusText: response.statusText, body: text };
+                console.error('Failed to parse JSON response for', endpoint, detail);
+                try { window.updateApiDebugPanel && window.updateApiDebugPanel(detail); } catch(e) {}
+                hideLoading();
+                return { success: false, message: 'Invalid server response' };
+            }
+
             hideLoading();
             return result;
         } catch (error) {
             hideLoading();
+            const detail = { endpoint: endpoint, error: String(error) };
+            try { window.updateApiDebugPanel && window.updateApiDebugPanel(detail); } catch(e) {}
             showNotification('Network error. Please try again.', 'error');
             console.error('API Error:', error);
             return { success: false, message: 'Network error' };

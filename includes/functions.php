@@ -11,7 +11,9 @@ require_once 'config.php';
  */
 function getJobCategories() {
     $conn = getDBConnection();
-    $result = $conn->query("SELECT category_id, category_name FROM job_category WHERE is_active = TRUE ORDER BY category_name");
+    $stmt = $conn->prepare("SELECT category_id, category_name FROM job_category WHERE is_active = TRUE ORDER BY category_name");
+    $stmt->execute();
+    $result = $stmt->get_result();
     
     $categories = [];
     while ($row = $result->fetch_assoc()) {
@@ -91,10 +93,10 @@ function searchJobs($filters) {
     $params = [];
     $types = "";
     
-    // Keyword search
+    // Keyword search - use prepared statements
     if (!empty($filters['keyword'])) {
         $whereConditions[] = "(j.job_title LIKE ? OR j.job_description LIKE ? OR e.company_name LIKE ?)";
-        $keyword = "%" . $filters['keyword'] . "%";
+        $keyword = "%" . $conn->real_escape_string($filters['keyword']) . "%";
         $params[] = $keyword;
         $params[] = $keyword;
         $params[] = $keyword;
@@ -104,21 +106,21 @@ function searchJobs($filters) {
     // Location filter
     if (!empty($filters['location'])) {
         $whereConditions[] = "j.location LIKE ?";
-        $params[] = "%" . $filters['location'] . "%";
+        $params[] = "%" . $conn->real_escape_string($filters['location']) . "%";
         $types .= "s";
     }
     
     // Job type filter
     if (!empty($filters['job_type'])) {
         $whereConditions[] = "j.job_type = ?";
-        $params[] = $filters['job_type'];
+        $params[] = $conn->real_escape_string($filters['job_type']);
         $types .= "s";
     }
     
     // Category filter
     if (!empty($filters['category'])) {
         $whereConditions[] = "j.category_id = ?";
-        $params[] = $filters['category'];
+        $params[] = (int)$filters['category'];
         $types .= "i";
     }
     
@@ -326,9 +328,9 @@ function getUserNotifications($user_id, $limit = 10) {
 function getJobSeekerProfile($user_id) {
     $conn = getDBConnection();
     $stmt = $conn->prepare("
-        SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
+     SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
                js.headline, js.bio, js.location, js.expected_salary, js.experience_level
-        FROM users u
+     FROM user u
         JOIN job_seeker js ON u.user_id = js.user_id
         WHERE u.user_id = ?
     ");
@@ -348,7 +350,7 @@ function saveJobSeekerProfile($user_id, $data) {
     
     // 1. Update User table
     $user_stmt = $conn->prepare("
-        UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
+        UPDATE user SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
     ");
     $user_stmt->bind_param("ssssi", 
         $data['first_name'], 
@@ -387,9 +389,9 @@ function saveJobSeekerProfile($user_id, $data) {
 function getEmployerProfile($user_id) {
     $conn = getDBConnection();
     $stmt = $conn->prepare("
-        SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
+     SELECT u.email, u.first_name, u.last_name, u.phone, u.profile_picture,
                e.company_name, e.company_description, e.industry, e.website_url, e.company_logo, e.company_size
-        FROM users u
+     FROM user u
         JOIN employer e ON u.user_id = e.user_id
         WHERE u.user_id = ?
     ");
@@ -409,7 +411,7 @@ function saveEmployerProfile($user_id, $data) {
     
     // 1. Update User table (for contact person details)
     $user_stmt = $conn->prepare("
-        UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
+        UPDATE user SET first_name = ?, last_name = ?, email = ?, phone = ? WHERE user_id = ?
     ");
     $user_stmt->bind_param("ssssi", 
         $data['first_name'], 
@@ -451,9 +453,9 @@ function saveEmployerProfile($user_id, $data) {
  * @return array
  */
 function uploadProfilePicture($file, $user_id) {
-    // Validate file
+    // Check for upload errors
     if ($file['error'] !== UPLOAD_ERR_OK) {
-        return ['success' => false, 'message' => 'File upload failed.'];
+        return ['success' => false, 'message' => 'Upload failed with error code: ' . $file['error']];
     }
     
     // Check file size (max 2MB)
@@ -461,16 +463,31 @@ function uploadProfilePicture($file, $user_id) {
         return ['success' => false, 'message' => 'File size must be less than 2MB.'];
     }
     
-    // Check file type
+    // Validate file type using finfo
     $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
-    $file_type = mime_content_type($file['tmp_name']);
-    if (!in_array($file_type, $allowed_types)) {
-        return ['success' => false, 'message' => 'Only JPG, PNG, and GIF images are allowed.'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
+        return ['success' => false, 'message' => 'Invalid file type. Only JPG, PNG, and GIF allowed.'];
     }
     
-    // Generate unique filename
-    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = 'profile_' . $user_id . '_' . time() . '.' . $extension;
+    // Validate file extension
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($extension, $allowed_extensions)) {
+        return ['success' => false, 'message' => 'Invalid file extension.'];
+    }
+    
+    // Check image dimensions
+    $image_info = getimagesize($file['tmp_name']);
+    if (!$image_info) {
+        return ['success' => false, 'message' => 'Invalid image file.'];
+    }
+    
+    // Generate secure filename
+    $filename = 'profile_' . $user_id . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
     $upload_path = UPLOAD_PATH . 'profiles/';
     
     // Create directory if it doesn't exist
@@ -485,12 +502,14 @@ function uploadProfilePicture($file, $user_id) {
         // Update database with relative path
         $relative_path = '/job-inquiry/uploads/profiles/' . $filename;
         $conn = getDBConnection();
-        $stmt = $conn->prepare("UPDATE users SET profile_picture = ? WHERE user_id = ?");
+    $stmt = $conn->prepare("UPDATE user SET profile_picture = ? WHERE user_id = ?");
         $stmt->bind_param("si", $relative_path, $user_id);
         
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Profile picture updated.', 'file_path' => $relative_path];
         } else {
+            // Delete the uploaded file if database update fails
+            unlink($full_path);
             return ['success' => false, 'message' => 'Failed to update database.'];
         }
     } else {
@@ -567,11 +586,11 @@ function validateEmail($email, $current_user_id = null) {
     
     if ($current_user_id) {
         // Check if email exists for other users (for profile updates)
-        $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+    $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ? AND user_id != ?");
         $stmt->bind_param("si", $email, $current_user_id);
     } else {
         // Check if email exists (for registration)
-        $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ?");
         $stmt->bind_param("s", $email);
     }
     

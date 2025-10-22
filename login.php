@@ -3,6 +3,23 @@
  * WorkConnect PH - Login Page
  */
 
+// Load core config/functions early so we can check session and redirect before sending HTML
+require_once 'includes/config.php';
+
+// If already logged in, redirect users away from the login page to their dashboard/home
+if (isLoggedIn()) {
+    $role = getCurrentUserRole();
+    if ($role === 'employer') {
+        redirect('employer.html');
+    } elseif ($role === 'job_seeker') {
+        redirect('jobseeker.html');
+    } elseif ($role === 'admin') {
+        redirect('admin.php');
+    } else {
+        redirect('index.php');
+    }
+}
+
 $pageTitle = "Login";
 $hideNavigation = true;
 require_once 'includes/header.php';
@@ -30,6 +47,10 @@ require_once 'includes/header.php';
                 <div class="form-group">
                     <label for="loginPassword" class="form-label">Password</label>
                     <input type="password" id="loginPassword" name="password" placeholder="Enter your password" required class="form-input">
+                </div>
+                <!-- Add this after the login form in login.php -->
+                <div class="auth-links">
+                    <a href="forgot-password.php" class="auth-link">Forgot your password?</a>
                 </div>
                 <button type="submit" class="btn btn-primary full">Log in</button>
                 <div id="loginMsg" class="message hidden"></div>

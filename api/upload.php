@@ -21,7 +21,7 @@ if ($method === 'POST') {
     $action = $_POST['action'] ?? '';
     
     // CSRF Token Validation
-    if (!isset($_POST['csrf_token']) || !validate_csrf_token($_POST['csrf_token'])) {
+    if (!isset($_POST['csrf_token']) || !validateCsrfToken($_POST['csrf_token'])) {
         jsonResponse(false, 'Invalid security token. Please refresh the page.', null, 403);
     }
     

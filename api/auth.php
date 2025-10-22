@@ -1,25 +1,18 @@
 <?php
-
 require_once '../includes/config.php';
 
-// Set JSON header
 header('Content-Type: application/json');
-
-// Enable error reporting but don't display to users
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-// Get request method and input data
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
-// If no JSON input, try form data as fallback
 if (!$input && $method === 'POST') {
     $input = $_POST;
 }
 
 try {
-    // Get action from query string or input
     $action = $_GET['action'] ?? $input['action'] ?? '';
     
     if (empty($action)) {
@@ -30,10 +23,18 @@ try {
 
     switch ($action) {
         case 'login':
+            // Add CSRF check for login
+            if (isset($input['csrf_token']) && !validateCsrfToken($input['csrf_token'])) {
+                throw new Exception('Invalid security token. Please refresh the page.');
+            }
             handleLogin($conn, $input);
             break;
             
         case 'register':
+            // Add CSRF check for registration
+            if (isset($input['csrf_token']) && !validateCsrfToken($input['csrf_token'])) {
+                throw new Exception('Invalid security token. Please refresh the page.');
+            }
             handleRegister($conn, $input);
             break;
             
@@ -45,6 +46,18 @@ try {
             handleSessionCheck();
             break;
             
+        case 'forgot_password':
+            handleForgotPassword($conn, $input);
+            break;
+            
+        case 'reset_password':
+            handleResetPassword($conn, $input);
+            break;
+            
+        case 'verify_email':
+            handleVerifyEmail($conn, $input);
+            break;
+            
         default:
             throw new Exception('Invalid action');
     }
@@ -53,9 +66,7 @@ try {
     jsonResponse(false, $e->getMessage());
 }
 
-/**
- * Handle user login
- */
+// ... your existing handleLogin, handleRegister functions ...
 function handleLogin($conn, $input) {
     // Validate required fields
     if (!isset($input['email']) || !isset($input['password'])) {
@@ -111,15 +122,27 @@ function handleLogin($conn, $input) {
     $updateStmt->bind_param("i", $user['user_id']);
     $updateStmt->execute();
     
-    jsonResponse(true, 'Login successful', $user['user_type']);
+    // Return structured data to match frontend expectations
+    jsonResponse(true, 'Login successful', ['role' => $user['user_type']]);
 }
 
 /**
- * Handle user registration
+ * Check current session status for front-end pages
  */
-/**
- * Handle user registration
- */
+function handleSessionCheck() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $logged_in = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+    $role = $_SESSION['user_role'] ?? null;
+
+    jsonResponse(true, $logged_in ? 'User logged in' : 'Not logged in', [
+        'logged_in' => $logged_in,
+        'role' => $role
+    ]);
+}
+
 function handleRegister($conn, $input) {
     // Debug: Log the received input
     error_log("Registration input: " . print_r($input, true));
@@ -210,40 +233,52 @@ function handleRegister($conn, $input) {
 }
 
 /**
- * Handle user logout
+ * Handle forgot password request
  */
-function handleLogout() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+function handleForgotPassword($conn, $input) {
+    if (!isset($input['email'])) {
+        throw new Exception('Email is required');
     }
     
-    // Clear all session variables
-    $_SESSION = [];
+    $email = trim($input['email']);
     
-    // Destroy session
-    if (session_destroy()) {
-        jsonResponse(true, 'Logout successful');
-    } else {
-        throw new Exception('Logout failed');
+    if (!validateEmail($email)) {
+        throw new Exception('Invalid email format');
     }
+    
+    $result = initiatePasswordReset($email);
+    jsonResponse($result['success'], $result['message'], $result['debug_url'] ?? null);
 }
 
 /**
- * Check current session status
+ * Handle password reset
  */
-function handleSessionCheck() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+function handleResetPassword($conn, $input) {
+    if (!isset($input['token']) || !isset($input['password'])) {
+        throw new Exception('Token and password are required');
     }
     
-    $logged_in = isset($_SESSION['user_id']);
+    $token = $input['token'];
+    $password = $input['password'];
     
-    jsonResponse(true, 'Session check complete', [
-        'logged_in' => $logged_in,
-        'user_id' => $_SESSION['user_id'] ?? null,
-        'role' => $_SESSION['user_type'] ?? null,
-        'email' => $_SESSION['email'] ?? null,
-        'first_name' => $_SESSION['first_name'] ?? null
-    ]);
+    if (!validatePassword($password)) {
+        throw new Exception('Password must be at least 8 characters');
+    }
+    
+    $result = completePasswordReset($token, $password);
+    jsonResponse($result['success'], $result['message']);
+}
+
+/**
+ * Handle email verification
+ */
+function handleVerifyEmail($conn, $input) {
+    if (!isset($input['token'])) {
+        throw new Exception('Verification token is required');
+    }
+    
+    $token = $input['token'];
+    $result = verifyEmail($token);
+    jsonResponse($result['success'], $result['message']);
 }
 ?>
