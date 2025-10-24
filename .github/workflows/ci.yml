@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, '**/update/*', '**/fix/*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  php-lint:
+    name: PHP Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Run php -l across repository
+        run: |
+          set -e
+          find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+
+  # Note: The smoke-test job below requires a running webserver and a MySQL DB configured
+  # on the runner (or a test service). It's provided as an optional job and is disabled
+  # by default. To enable, change `if: false` to a suitable condition and provide
+  # service configuration (or run the smoke tests in your own environment).
+  smoke-test:
+    name: Smoke Tests (optional)
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke script (requires local webserver and DB)
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\run_smoke.ps1

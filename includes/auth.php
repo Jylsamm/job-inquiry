@@ -3,8 +3,11 @@
  * WorkConnect PH - Authentication Functions
  */
 
-// config.php is included first, so this require_once should be clean.
 require_once 'config.php';
+require_once 'Database.php';
+require_once 'Validator.php';
+require_once 'ApiResponse.php';
+require_once 'Logger.php';
 
 /**
  * User login function
@@ -304,5 +307,103 @@ function verifyEmail($token) {
     }
     
     return ['success' => false, 'message' => 'Invalid or expired verification token.'];
+}
+
+// API Endpoint Handler
+// Only execute this block when this file is the main script (requested directly).
+// When `includes/auth.php` is required by `api/auth.php` we don't want to run
+// the handler here because `api/auth.php` implements the public endpoint.
+if (basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'])) {
+    header('Content-Type: application/json');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('X-XSS-Protection: 1; mode=block');
+
+    error_reporting(E_ALL);
+    ini_set('display_errors', 0);
+
+    $logger = Logger::getInstance();
+    $method = $_SERVER['REQUEST_METHOD'];
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input && $method === 'POST') {
+        $input = $_POST;
+    }
+
+    try {
+        // Rate limiting check
+        $ip = $_SERVER['REMOTE_ADDR'];
+        if (isset($_SESSION['login_attempts'][$ip]) && $_SESSION['login_attempts'][$ip]['count'] >= 5) {
+            if (time() - $_SESSION['login_attempts'][$ip]['time'] < 900) { // 15 minutes
+                $logger->warning('Rate limit exceeded', ['ip' => $ip]);
+                ApiResponse::error('Too many attempts. Please try again later.', 429);
+            } else {
+                unset($_SESSION['login_attempts'][$ip]);
+            }
+        }
+
+        $action = $_GET['action'] ?? $input['action'] ?? '';
+        
+        if (empty($action)) {
+            throw new Exception('Action parameter is required');
+        }
+
+        switch ($action) {
+            case 'login':
+                if (isset($input['csrf_token']) && !validateCsrfToken($input['csrf_token'])) {
+                    throw new Exception('Invalid security token. Please refresh the page.');
+                }
+                $result = loginUser($input['email'], $input['password']);
+                if ($result['success']) {
+                    ApiResponse::success($result);
+                } else {
+                    ApiResponse::error($result['message']);
+                }
+                break;
+
+            case 'register':
+                $result = registerUser($input);
+                if ($result['success']) {
+                    ApiResponse::success($result);
+                } else {
+                    ApiResponse::error($result['message']);
+                }
+                break;
+
+            case 'logout':
+                $result = logoutUser();
+                ApiResponse::success($result);
+                break;
+
+            case 'forgot-password':
+                $result = initiatePasswordReset($input['email']);
+                ApiResponse::success($result);
+                break;
+
+            case 'reset-password':
+                $result = completePasswordReset($input['token'], $input['new_password']);
+                if ($result['success']) {
+                    ApiResponse::success($result);
+                } else {
+                    ApiResponse::error($result['message']);
+                }
+                break;
+
+            case 'verify-email':
+                $result = verifyEmail($input['token']);
+                if ($result['success']) {
+                    ApiResponse::success($result);
+                } else {
+                    ApiResponse::error($result['message']);
+                }
+                break;
+
+            default:
+                throw new Exception('Invalid action');
+        }
+    } catch (Exception $e) {
+        $logger->error('Auth error', ['error' => $e->getMessage()]);
+        ApiResponse::error($e->getMessage());
+    }
 }
 ?>
