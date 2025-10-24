@@ -11,7 +11,19 @@ function Test-Endpoint($name, $url, $method = 'GET', $body = $null) {
         } else {
             $resp = Invoke-RestMethod -Uri $url -Method Post -Body (ConvertTo-Json $body) -ContentType 'application/json' -ErrorAction Stop
         }
-        Write-Host "  OK: success=$($resp.success) message=$($resp.message)" -ForegroundColor Green
+        # Normalize response shapes: some endpoints return { success, message, data }
+        # while others return { status, message, data }.
+        $statusVal = $null
+        if ($resp -and $resp.PSObject.Properties.Name -contains 'success') {
+            $statusVal = $resp.success
+        } elseif ($resp -and $resp.PSObject.Properties.Name -contains 'status') {
+            $statusVal = $resp.status
+        }
+        $messageVal = $null
+        if ($resp -and $resp.PSObject.Properties.Name -contains 'message') {
+            $messageVal = $resp.message
+        }
+        Write-Host "  OK: status=$statusVal message=$messageVal" -ForegroundColor Green
     } catch {
         Write-Host "  ERROR: $_" -ForegroundColor Red
     }
