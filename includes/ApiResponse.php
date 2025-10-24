@@ -3,6 +3,8 @@ class ApiResponse {
     public static function success($data = null, $message = 'Success') {
         header('Content-Type: application/json');
         echo json_encode([
+            // Backwards-compatibility: include both 'status' and 'success' fields
+            'success' => true,
             'status' => 'success',
             'message' => $message,
             'data' => $data
@@ -14,6 +16,8 @@ class ApiResponse {
         header('Content-Type: application/json');
         http_response_code($code);
         echo json_encode([
+            // Backwards-compatibility: include both 'status' and 'success' fields
+            'success' => false,
             'status' => 'error',
             'message' => $message
         ]);
