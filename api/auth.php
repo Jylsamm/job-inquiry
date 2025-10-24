@@ -30,6 +30,9 @@ if (!$input && $method === 'POST') {
     'input' => $input
 ]) . PHP_EOL, FILE_APPEND);
 
+// Also write a short debug line into the main log file so we can see it with existing logs
+error_log(date('c') . " AUTH_DEBUG: request_uri=" . ($_SERVER['REQUEST_URI'] ?? '-') . " query=" . ($_SERVER['QUERY_STRING'] ?? '-') . " get_action=" . ($_GET['action'] ?? '-') . PHP_EOL, 3, __DIR__ . '/logs/2025-10-24.log');
+
 try {
     $action = $_GET['action'] ?? $input['action'] ?? '';
     if (empty($action)) {
