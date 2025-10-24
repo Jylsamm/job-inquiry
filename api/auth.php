@@ -39,6 +39,10 @@ try {
         throw new Exception('Action parameter is required');
     }
 
+    // DEBUG: return the resolved action directly for troubleshooting
+    // Remove this debug block after investigation
+    ApiResponse::success(['debug_action' => $action]);
+
     switch ($action) {
         case 'check':
             $data = ['logged_in' => isLoggedIn(), 'role' => getCurrentUserRole()];
