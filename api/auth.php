@@ -39,9 +39,7 @@ try {
         throw new Exception('Action parameter is required');
     }
 
-    // DEBUG: return the resolved action directly for troubleshooting
-    // Remove this debug block after investigation
-    ApiResponse::success(['debug_action' => $action]);
+    // (previously had a temporary debug response here; removed)
 
     switch ($action) {
         case 'check':

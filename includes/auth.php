@@ -313,7 +313,9 @@ function verifyEmail($token) {
 // Only execute this block when this file is the main script (requested directly).
 // When `includes/auth.php` is required by `api/auth.php` we don't want to run
 // the handler here because `api/auth.php` implements the public endpoint.
-if (basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'])) {
+// Use realpath comparison to avoid false positives when two different files
+// share the same basename (e.g., `api/auth.php` and `includes/auth.php`).
+if (realpath(__FILE__) === realpath($_SERVER['SCRIPT_FILENAME'])) {
     header('Content-Type: application/json');
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
