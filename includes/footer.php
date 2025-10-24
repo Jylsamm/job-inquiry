@@ -6,13 +6,17 @@
     </main>
 
     <!-- Notification System -->
-    <div id="notification" class="notification hidden"></div>
+    <div id="notification" class="fixed top-4 right-4 transform transition-transform duration-300 translate-x-full z-50">
+        <div class="flex items-center p-4 text-white rounded-lg shadow-lg">
+            <div class="notification-content"></div>
+        </div>
+    </div>
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay hidden">
-        <div class="loading-spinner">
-            <i class="bi bi-arrow-repeat"></i>
-            <p>Loading...</p>
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+            <i class="bi bi-arrow-repeat text-3xl text-primary-600 animate-spin"></i>
+            <p class="mt-2 text-gray-700">Loading...</p>
         </div>
     </div>
 
@@ -48,10 +52,33 @@
         }
     }
 
-    // AJAX helper
+    // AJAX helper (backwards-compatible). If the modern ApiService is available use it,
+    // otherwise fall back to the legacy fetch-based implementation.
     async function apiCall(endpoint, data = {}, method = 'POST') {
+        // If ApiService is loaded (module or global), proxy to it for unified behavior
+        try {
+            if (window.apiService && typeof window.apiService.post === 'function') {
+                // Map legacy endpoint strings to ApiService path expectations
+                // e.g. 'auth.php?action=login' -> 'auth.php?action=login'
+                // ApiService expects endpoint relative to /api (it has baseUrl configured)
+                const lower = method.toLowerCase();
+                if (lower === 'get') {
+                    return await window.apiService.get(endpoint, data || {});
+                } else if (lower === 'post') {
+                    return await window.apiService.post(endpoint, data || {});
+                } else if (lower === 'put') {
+                    return await window.apiService.put(endpoint, data || {});
+                } else if (lower === 'delete') {
+                    return await window.apiService.delete(endpoint);
+                }
+            }
+        } catch (e) {
+            // If proxying fails for any reason, continue to legacy fallback
+            console.warn('apiCall proxy to ApiService failed, using fallback:', e);
+        }
+
+        // Legacy fallback (kept for pages that don't load ApiService)
         showLoading();
-        
         try {
             const response = await fetch(`api/${endpoint}`, {
                 method: method,

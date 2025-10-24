@@ -88,11 +88,30 @@ class ApiMiddleware {
             return;
         }
         
-        $headers = getallheaders();
+        // getallheaders() is not available on all SAPI; provide a safe fallback
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+        } else {
+            $headers = [];
+            foreach ($_SERVER as $name => $value) {
+                if (substr($name, 0, 5) === 'HTTP_') {
+                    $headerName = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+                    $headers[$headerName] = $value;
+                }
+            }
+        }
+
         $token = null;
-        
-        if (isset($headers['Authorization'])) {
-            $auth = explode(' ', $headers['Authorization']);
+        $authHeader = null;
+        foreach ($headers as $k => $v) {
+            if (strtolower($k) === 'authorization') {
+                $authHeader = $v;
+                break;
+            }
+        }
+
+        if ($authHeader) {
+            $auth = explode(' ', $authHeader);
             if (count($auth) === 2 && strtolower($auth[0]) === 'bearer') {
                 $token = $auth[1];
             }

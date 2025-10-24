@@ -1,0 +1,24 @@
+# Environment files
+.env.*
+!.env.example
+
+# Logs
+api/logs/*
+!api/logs/.gitkeep
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Dependencies
+vendor/
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary files
+*.log
+*.cache

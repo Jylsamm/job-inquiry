@@ -6,6 +6,8 @@ class ApiService {
 
     constructor() {
         this.#token = localStorage.getItem('token');
+        this.timeout = 30000; // default timeout 30s
+        this.retries = 2; // number of retries on network failure
     }
 
     static getInstance() {
@@ -40,15 +42,64 @@ class ApiService {
         return data;
     }
 
+    // Public wrapper for other modules that need to call this
+    async handleResponse(response) {
+        return await this.#handleResponse(response);
+    }
+
+    // Internal fetch with timeout and retry
+    async #fetchWithTimeout(url, opts = {}, timeout = null, retries = 0) {
+        timeout = timeout || this.timeout;
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        opts.signal = controller.signal;
+
+        try {
+            const res = await fetch(url, opts);
+            clearTimeout(id);
+            return res;
+        } catch (err) {
+            clearTimeout(id);
+            if (retries > 0 && (err.name === 'AbortError' || err.name === 'TypeError')) {
+                // Simple backoff
+                await new Promise(r => setTimeout(r, 500));
+                return this.#fetchWithTimeout(url, opts, timeout, retries - 1);
+            }
+            throw err;
+        }
+    }
+
+    // Upload files using FormData, keep headers minimal so browser sets boundary
+    async upload(endpoint, formData) {
+        try {
+            const opts = {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            };
+
+            const token = this.#token || localStorage.getItem('token');
+            if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`${this.#baseUrl}/${endpoint}`, opts);
+            return await this.#handleResponse(response);
+        } catch (error) {
+            console.error('API Upload Error:', error);
+            throw error;
+        }
+    }
+
     async get(endpoint, params = {}) {
         const url = new URL(`${this.#baseUrl}/${endpoint}`);
         Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
         try {
-            const response = await fetch(url, {
+            const response = await this.#fetchWithTimeout(url, {
                 method: 'GET',
                 headers: this.#getHeaders()
-            });
+            }, this.timeout, this.retries);
             return await this.#handleResponse(response);
         } catch (error) {
             console.error('API Get Error:', error);
@@ -58,11 +109,11 @@ class ApiService {
 
     async post(endpoint, data = {}) {
         try {
-            const response = await fetch(`${this.#baseUrl}/${endpoint}`, {
+            const response = await this.#fetchWithTimeout(`${this.#baseUrl}/${endpoint}`, {
                 method: 'POST',
                 headers: this.#getHeaders(),
                 body: JSON.stringify(data)
-            });
+            }, this.timeout, this.retries);
             return await this.#handleResponse(response);
         } catch (error) {
             console.error('API Post Error:', error);
@@ -72,11 +123,11 @@ class ApiService {
 
     async put(endpoint, data = {}) {
         try {
-            const response = await fetch(`${this.#baseUrl}/${endpoint}`, {
+            const response = await this.#fetchWithTimeout(`${this.#baseUrl}/${endpoint}`, {
                 method: 'PUT',
                 headers: this.#getHeaders(),
                 body: JSON.stringify(data)
-            });
+            }, this.timeout, this.retries);
             return await this.#handleResponse(response);
         } catch (error) {
             console.error('API Put Error:', error);
@@ -86,10 +137,10 @@ class ApiService {
 
     async delete(endpoint) {
         try {
-            const response = await fetch(`${this.#baseUrl}/${endpoint}`, {
+            const response = await this.#fetchWithTimeout(`${this.#baseUrl}/${endpoint}`, {
                 method: 'DELETE',
                 headers: this.#getHeaders()
-            });
+            }, this.timeout, this.retries);
             return await this.#handleResponse(response);
         } catch (error) {
             console.error('API Delete Error:', error);
@@ -181,20 +232,28 @@ class ProfileService {
         const formData = new FormData();
         formData.append('resume', file);
 
-        const response = await fetch(`${this.#api.baseUrl}/profiles/resume`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: formData
-        });
-
-        return this.#api.handleResponse(response);
+        return await this.#api.upload('profiles/resume', formData);
     }
 }
 
 // Export services
-export const apiService = ApiService.getInstance();
-export const jobService = new JobService();
-export const authService = new AuthService();
-export const profileService = new ProfileService();
+const _apiService = ApiService.getInstance();
+const _jobService = new JobService();
+const _authService = new AuthService();
+const _profileService = new ProfileService();
+
+// Expose to module consumers
+export const apiService = _apiService;
+export const jobService = _jobService;
+export const authService = _authService;
+export const profileService = _profileService;
+
+// Also expose globally for legacy pages that don't load ES modules
+try {
+    window.apiService = _apiService;
+    window.jobService = _jobService;
+    window.authService = _authService;
+    window.profileService = _profileService;
+} catch (e) {
+    // window may be undefined in some bundlers/environments
+}

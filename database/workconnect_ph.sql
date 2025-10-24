@@ -564,6 +564,147 @@ INSERT INTO message (sender_id, receiver_id, subject, message_text) VALUES
 (4, 1, 'Interview Invitation', 'Hello Maria! We were impressed with your application and would like to invite you for an interview. Please let us know your availability.'),
 (1, 4, 'Re: Interview Invitation', 'Thank you for the invitation! I am available next week Monday to Wednesday. Looking forward to discussing the opportunity.');
 
+-- =============================================
+-- OPTIMIZATIONS & SUPPORT TABLES (added to meet application requirements)
+-- These changes add soft-delete support, integrity constraints, monitoring and helper tables
+-- =============================================
+
+-- 1. Soft delete columns and indexes
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL;
+ALTER TABLE `job` ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL;
+ALTER TABLE `application` ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL;
+ALTER TABLE `employer` ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL;
+ALTER TABLE `job_seeker` ADD COLUMN IF NOT EXISTS deleted_at DATETIME DEFAULT NULL;
+
+ALTER TABLE `user` ADD INDEX IF NOT EXISTS idx_user_deleted_at (deleted_at);
+ALTER TABLE `job` ADD INDEX IF NOT EXISTS idx_job_deleted_at (deleted_at);
+ALTER TABLE `application` ADD INDEX IF NOT EXISTS idx_application_deleted_at (deleted_at);
+ALTER TABLE `employer` ADD INDEX IF NOT EXISTS idx_employer_deleted_at (deleted_at);
+ALTER TABLE `job_seeker` ADD INDEX IF NOT EXISTS idx_seeker_deleted_at (deleted_at);
+
+-- 2. Composite and utility indexes to support common queries
+ALTER TABLE `job`
+    ADD INDEX IF NOT EXISTS idx_job_search (status, application_deadline, job_type, location),
+    ADD INDEX IF NOT EXISTS idx_salary_range (salary_min, salary_max),
+    ADD INDEX IF NOT EXISTS idx_category_date (category_id, created_at);
+
+ALTER TABLE `application`
+    ADD INDEX IF NOT EXISTS idx_application_search (job_seeker_id, status, applied_at);
+
+ALTER TABLE `job_seeker`
+    ADD INDEX IF NOT EXISTS idx_seeker_search (experience_level, education_level, location);
+
+ALTER TABLE `employer`
+    ADD INDEX IF NOT EXISTS idx_employer_company_name (company_name);
+
+ALTER TABLE `user`
+    ADD INDEX IF NOT EXISTS idx_auth (email, is_active);
+
+-- 3. Data integrity constraints (MySQL may ignore CHECK in older versions)
+ALTER TABLE `job` 
+    ADD CONSTRAINT IF NOT EXISTS chk_salary_range CHECK (salary_max IS NULL OR salary_min IS NULL OR salary_max >= salary_min);
+
+ALTER TABLE `education`
+    ADD CONSTRAINT IF NOT EXISTS chk_education_dates CHECK (end_date IS NULL OR end_date >= start_date);
+
+ALTER TABLE `work_experience`
+    ADD CONSTRAINT IF NOT EXISTS chk_work_dates CHECK (end_date IS NULL OR end_date >= start_date);
+
+-- 4. Password reset and email verification helper tables
+CREATE TABLE IF NOT EXISTS password_reset (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        token VARCHAR(128) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES `user`(user_id) ON DELETE CASCADE,
+        INDEX idx_password_reset_token (token),
+        INDEX idx_password_reset_user (user_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS email_verification (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        token VARCHAR(128) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES `user`(user_id) ON DELETE CASCADE,
+        INDEX idx_email_verification_token (token),
+        INDEX idx_email_verification_user (user_id)
+) ENGINE=InnoDB;
+
+-- 5. Monitoring and support tables
+CREATE TABLE IF NOT EXISTS query_log (
+        log_id INT PRIMARY KEY AUTO_INCREMENT,
+        query_text TEXT,
+        execution_time DECIMAL(10,4),
+        rows_affected INT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        user_id INT,
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_execution_time (execution_time)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(255) NOT NULL,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (version)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        ip_address VARCHAR(45) NOT NULL,
+        endpoint VARCHAR(255) NOT NULL,
+        requests INT UNSIGNED DEFAULT 1,
+        window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_ip_endpoint (ip_address, endpoint),
+        INDEX idx_window_start (window_start)
+) ENGINE=InnoDB;
+
+-- 6. Triggers: keep application/job counts up-to-date
+DELIMITER //
+
+CREATE TRIGGER IF NOT EXISTS after_application_insert
+AFTER INSERT ON application
+FOR EACH ROW
+BEGIN
+        UPDATE job 
+        SET applications_count = applications_count + 1 
+        WHERE job_id = NEW.job_id;
+END;//
+
+CREATE TRIGGER IF NOT EXISTS after_application_delete
+AFTER DELETE ON application
+FOR EACH ROW
+BEGIN
+        UPDATE job 
+        SET applications_count = GREATEST(0, applications_count - 1) 
+        WHERE job_id = OLD.job_id;
+END;//
+
+CREATE TRIGGER IF NOT EXISTS after_job_view_insert
+AFTER INSERT ON job_view
+FOR EACH ROW
+BEGIN
+        UPDATE job 
+        SET views_count = views_count + 1 
+        WHERE job_id = NEW.job_id;
+END;//
+
+-- 7. Scheduled event to expire jobs past deadline (ensure event scheduler is enabled on the server)
+CREATE EVENT IF NOT EXISTS update_expired_jobs
+ON SCHEDULE EVERY 1 DAY
+DO
+BEGIN
+        UPDATE job 
+        SET status = 'expired' 
+        WHERE application_deadline < CURDATE() 
+            AND status = 'published'
+            AND deleted_at IS NULL;
+END;//
+
+DELIMITER ;
+
 COMMIT;
 
 SELECT 'WorkConnect PH Database Successfully Created!' AS message;

@@ -25,21 +25,40 @@ document.addEventListener('DOMContentLoaded', function () {
     const loginMsg = document.getElementById('loginMsg');
     const registerMsg = document.getElementById('registerMsg');
 
+    // API helper: prefer modern apiService but fall back to legacy apiCall
+    const API = (typeof window !== 'undefined' && window.apiService && typeof window.apiService.post === 'function')
+        ? window.apiService
+        : { post: async (endpoint, data) => await apiCall(endpoint, data) };
+
     // Tab Switching
     function switchToLogin() {
-        loginTab.classList.add('active');
-        registerTab.classList.remove('active');
-        loginForm.classList.add('active');
-        registerForm.classList.remove('active');
+        // Update tab styles
+        loginTab.classList.add('border-primary-600', 'text-primary-600');
+        loginTab.classList.remove('text-gray-500', 'hover:text-gray-700');
+        registerTab.classList.remove('border-primary-600', 'text-primary-600');
+        registerTab.classList.add('text-gray-500', 'hover:text-gray-700');
+        
+        // Show/hide forms
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+        
+        // Update toggle text
         authToggleText.textContent = "Don't have an account?";
         authToggleBtn.textContent = "Sign up";
     }
 
     function switchToRegister() {
-        registerTab.classList.add('active');
-        loginTab.classList.remove('active');
-        registerForm.classList.add('active');
-        loginForm.classList.remove('active');
+        // Update tab styles
+        registerTab.classList.add('border-primary-600', 'text-primary-600');
+        registerTab.classList.remove('text-gray-500', 'hover:text-gray-700');
+        loginTab.classList.remove('border-primary-600', 'text-primary-600');
+        loginTab.classList.add('text-gray-500', 'hover:text-gray-700');
+        
+        // Show/hide forms
+        registerForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        
+        // Update toggle text
         authToggleText.textContent = "Already have an account?";
         authToggleBtn.textContent = "Sign in";
     }
@@ -85,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
             csrf_token: csrfToken // ADDED CSRF token
         };
 
-        const response = await apiCall('auth.php?action=login', requestData);
+    const response = await API.post('auth.php?action=login', requestData);
 
         try {
             console.log('Login API raw response:', response);
@@ -203,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             console.log("Sending registration data to API:", userData);
             
-            const response = await apiCall('auth.php?action=register', userData);
+            const response = await API.post('auth.php?action=register', userData);
             console.log("API Response:", response);
 
             if (response.success) {

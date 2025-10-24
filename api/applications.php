@@ -55,6 +55,9 @@ switch ($method) {
                     ");
                     $stmt->bind_param("i", $employer_id);
                     $stmt->execute();
+                    if ($stmt === false) {
+                        jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+                    }
                     
                     $result = $stmt->get_result();
                     $applications = [];
@@ -82,12 +85,18 @@ switch ($method) {
             $conn = getDBConnection();
             $stmt = $conn->prepare("UPDATE application SET status = ?, status_notes = ? WHERE application_id = ?");
             $stmt->bind_param("ssi", $input['status'], $input['notes'], $application_id);
+            if ($stmt === false) {
+                jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+            }
             
             if ($stmt->execute()) {
                 // Log status change
                 $historyStmt = $conn->prepare("INSERT INTO application_status_history (application_id, old_status, new_status, change_notes, changed_by_user_id) VALUES (?, ?, ?, ?, ?)");
                 $historyStmt->bind_param("isssi", $application_id, $input['old_status'], $input['status'], $input['notes'], $_SESSION['user_id']);
                 $historyStmt->execute();
+                if ($historyStmt === false) {
+                    jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+                }
                 
                 jsonResponse(true, 'Application status updated.');
             } else {

@@ -1,10 +1,19 @@
 <?php
 require_once '../includes/config.php';
+require_once '../includes/Database.php';
+require_once '../includes/Validator.php';
+require_once '../includes/ApiResponse.php';
+require_once '../includes/Logger.php';
 
 header('Content-Type: application/json');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-XSS-Protection: 1; mode=block');
+
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
+$logger = Logger::getInstance();
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -13,13 +22,25 @@ if (!$input && $method === 'POST') {
 }
 
 try {
+    // Rate limiting check
+    $ip = $_SERVER['REMOTE_ADDR'];
+    if (isset($_SESSION['login_attempts'][$ip]) && $_SESSION['login_attempts'][$ip]['count'] >= 5) {
+        if (time() - $_SESSION['login_attempts'][$ip]['time'] < 900) { // 15 minutes
+            $logger->warning('Rate limit exceeded', ['ip' => $ip]);
+            ApiResponse::error('Too many attempts. Please try again later.', 429);
+        } else {
+            unset($_SESSION['login_attempts'][$ip]);
+        }
+    }
+
     $action = $_GET['action'] ?? $input['action'] ?? '';
     
     if (empty($action)) {
         throw new Exception('Action parameter is required');
     }
 
-    $conn = getDBConnection();
+    $db = Database::getInstance();
+    $conn = $db->getConnection();
 
     switch ($action) {
         case 'login':
@@ -91,6 +112,9 @@ function handleLogin($conn, $input) {
         FROM user 
         WHERE email = ? AND is_active = TRUE
     ");
+        if ($stmt === false) {
+            jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+        }
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();

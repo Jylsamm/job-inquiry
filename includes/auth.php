@@ -17,7 +17,7 @@ function loginUser($email, $password) {
     $conn = getDBConnection();
     $email = sanitizeInput($email);
     
-    $stmt = $conn->prepare("SELECT user_id, email, password_hash, first_name, last_name, user_type, is_active FROM user WHERE email = ?");
+    $stmt = db_prepare_or_error($conn, "SELECT user_id, email, password_hash, first_name, last_name, user_type, is_active FROM user WHERE email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -36,7 +36,7 @@ function loginUser($email, $password) {
                 $_SESSION['logged_in'] = true;
                 
                 // Update last login
-                $updateStmt = $conn->prepare("UPDATE user SET last_login = NOW() WHERE user_id = ?");
+                $updateStmt = db_prepare_or_error($conn, "UPDATE user SET last_login = NOW() WHERE user_id = ?");
                 $updateStmt->bind_param("i", $user['user_id']);
                 $updateStmt->execute();
                 
@@ -72,7 +72,7 @@ function registerUser($userData) {
     }
     
     // Check if email exists
-    $checkStmt = $conn->prepare("SELECT user_id FROM user WHERE email = ?");
+    $checkStmt = db_prepare_or_error($conn, "SELECT user_id FROM user WHERE email = ?");
     $checkStmt->bind_param("s", $userData['email']);
     $checkStmt->execute();
     

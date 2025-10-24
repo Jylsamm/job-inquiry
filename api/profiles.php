@@ -145,7 +145,7 @@ function handlePutRequest($role, $user_id) {
             }
             
             // Email validation
-            $emailValidation = validateEmail($input['email'], $user_id);
+            $emailValidation = validateEmailUnique($input['email'], $user_id);
             if (!$emailValidation['valid']) {
                 jsonResponse(false, $emailValidation['message']);
             }
@@ -168,7 +168,7 @@ function handlePutRequest($role, $user_id) {
             }
             
             // Email validation
-            $emailValidation = validateEmail($input['email'], $user_id);
+            $emailValidation = validateEmailUnique($input['email'], $user_id);
             if (!$emailValidation['valid']) {
                 jsonResponse(false, $emailValidation['message']);
             }

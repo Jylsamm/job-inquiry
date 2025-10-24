@@ -49,7 +49,8 @@
                     <!-- Profile Page -->
                     <div id="profilePage" class="page active">
                         <h2>My Profile</h2>
-                        <form id="profileForm" class="profile-form">
+                        <form id="profileForm" class="profile-form" action="api/profiles.php?action=save_job_seeker" method="POST">
+                            <input type="hidden" id="csrf_token_profile" name="csrf_token" value="">
                             <div class="form-row">
                                 <label>Profile Picture</label>
                                 <div class="logo-uploader">
@@ -59,20 +60,26 @@
                                     <label for="profileInput" class="file-upload">
                                         <i class="bi bi-cloud-upload"></i> Upload Photo
                                     </label>
-                                    <input type="file" id="profileInput" accept="image/*">
+                                    <input type="file" id="profileInput" name="profile_picture" accept="image/*">
+                                </div>
+                            </div>
+                            <div class="form-row two-columns">
+                                <div>
+                                    <label>First Name</label>
+                                    <input type="text" id="profileFirstName" value="Juan" name="first_name" required>
+                                </div>
+                                <div>
+                                    <label>Last Name</label>
+                                    <input type="text" id="profileLastName" value="Dela Cruz" name="last_name" required>
                                 </div>
                             </div>
                             <div class="form-row">
-                                <label>Name</label>
-                                <input type="text" id="profileName" value="Juan Dela Cruz" name="profileName" required>
-                            </div>
-                            <div class="form-row">
                                 <label>Email</label>
-                                <input type="email" id="profileEmail" value="juan@example.com" name="profileEmail" required>
+                                <input type="email" id="profileEmail" value="juan@example.com" name="email" required>
                             </div>
                             <div class="form-row">
                                 <label>Skills</label>
-                                <input type="text" id="profileSkills" value="Web Development, Java, C++" name="profileSkills"
+                                <input type="text" id="profileSkills" value="Web Development, Java, C++" name="skills"
                                     placeholder="Add skills separated by commas">
                             </div>
                             <div class="form-row">
@@ -81,7 +88,7 @@
                                     <label for="resumeUpload" class="file-upload">
                                         <i class="bi bi-cloud-upload"></i> Upload Resume
                                     </label>
-                                    <input type="file" id="resumeUpload" accept=".pdf,.doc,.docx">
+                                    <input type="file" id="resumeUpload" name="resume" accept=".pdf,.doc,.docx">
                                     <span id="resumeFileName">No file chosen</span>
                                 </div>
                             </div>

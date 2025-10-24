@@ -1,179 +1,295 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-gray-50">
 
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Employer Dashboard - WorkConnect PH</title>
-        <link rel="stylesheet" href="assets/css/main.css">
-        <link rel="stylesheet" href="assets/css/dashboard.css">
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employer Dashboard - WorkConnect PH</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50:  '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        secondary: '#764ba2'
+                    },
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="assets/css/custom.css">
+</head>
 
-    <body>
-        <!-- Note: This dashboard lacks the loadingOverlay from the PHP footer, which is now critical for the API calls in config.js -->
-        <div id="loadingOverlay" class="loading-overlay hidden">
-            <div class="loading-spinner">
-                <i class="bi bi-arrow-repeat"></i>
-                <p>Loading...</p>
-            </div>
+<body class="h-full">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+            <i class="bi bi-arrow-repeat text-3xl text-primary-600 animate-spin"></i>
+            <p class="mt-2 text-gray-700">Loading...</p>
         </div>
-        
-        <button class="notification-bell" id="notifBell" aria-label="Notifications">
-            <i class="bi bi-bell-fill"></i>
-            <span class="notification-badge" id="notifBadge">0</span>
-        </button>
+    </div>
 
-        <div class="dashboard">
-            <div class="sidebar">
-                <div class="brand">
-                    <!-- Note: logo.png is likely a placeholder for one of the actual images -->
-                    <img src="assets/images/logowhite.png" alt="WorkConnect PH Logo" class="logo">
-                    <h3>Employer</h3>
-                </div>
-                <ul id="sidebarMenu">
-                    <li class="active-link" data-page="company"><i class="bi bi-building"></i> Company Profile</li>
-                    <li data-page="postjob"><i class="bi bi-plus-circle"></i> Post Job</li>
-                    <li data-page="applications"><i class="bi bi-people"></i> Applications</li>
-                    <li data-page="posted"><i class="bi bi-list-check"></i> Posted Jobs</li>
-                    <li class="logout">
-                        <!-- UPDATED link to use PHP logout script -->
-                        <a href="logout.php" id="logoutBtn" style="color:white;text-decoration:none;">
-                            <i class="bi bi-box-arrow-right"></i> Logout
+    <!-- Notification Bell -->
+    <button class="fixed top-4 right-4 bg-white p-2 rounded-full shadow-lg z-40" id="notifBell" aria-label="Notifications">
+        <i class="bi bi-bell-fill text-gray-600"></i>
+        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center" id="notifBadge">0</span>
+    </button>
+
+    <!-- Dashboard Layout -->
+    <div class="min-h-full">
+        <!-- Sidebar -->
+        <div class="fixed inset-y-0 left-0 w-64 bg-primary-600 text-white">
+            <!-- Brand -->
+            <div class="flex items-center space-x-3 px-4 py-6">
+                <img src="assets/images/logowhite.png" alt="WorkConnect PH Logo" class="h-8 w-auto">
+                <h3 class="text-lg font-semibold">Employer</h3>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="mt-6">
+                <ul id="sidebarMenu" class="space-y-1">
+                    <li>
+                        <a href="#" class="flex items-center px-4 py-3 text-sm font-medium transition hover:bg-primary-700 active-link" data-page="company">
+                            <i class="bi bi-building text-lg mr-3"></i> Company Profile
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center px-4 py-3 text-sm font-medium transition hover:bg-primary-700" data-page="postjob">
+                            <i class="bi bi-plus-circle text-lg mr-3"></i> Post Job
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center px-4 py-3 text-sm font-medium transition hover:bg-primary-700" data-page="applications">
+                            <i class="bi bi-people text-lg mr-3"></i> Applications
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center px-4 py-3 text-sm font-medium transition hover:bg-primary-700" data-page="posted">
+                            <i class="bi bi-list-check text-lg mr-3"></i> Posted Jobs
                         </a>
                     </li>
                 </ul>
-            </div>
 
-            <div class="main-content">
-                <div id="content">
-                    <!-- Company Profile Page -->
-                    <div id="companyPage" class="page active">
-                        <h2>Company Profile</h2>
-                        <div id="companyMessage" class="message hidden"></div>
-                        <form id="companyForm" class="company-form">
-                            <div class="form-row">
-                                <label>Company Logo</label>
-                                <div class="logo-uploader">
-                                    <div class="logo-preview" id="logoPreview">
-                                        <span class="note"><i class="bi bi-building"></i></span>
-                                    </div>
-                                    <label for="logoInput" class="file-upload">
-                                        <i class="bi bi-cloud-upload"></i> Upload Logo
-                                    </label>
-                                    <input type="file" id="logoInput" accept="image/*">
+                <!-- Logout -->
+                <div class="absolute bottom-0 w-full p-4">
+                    <a href="logout.php" id="logoutBtn" class="flex items-center px-4 py-3 text-sm font-medium text-white hover:bg-primary-700 transition rounded">
+                        <i class="bi bi-box-arrow-right text-lg mr-3"></i> Logout
+                    </a>
+                </div>
+            </nav>
+        </div>
+
+            <!-- Main Content -->
+            <div class="ml-64 flex flex-col min-h-screen bg-gray-50">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <!-- Company Profile Page -->
+                        <div id="companyPage" class="page active">
+                            <div class="bg-white shadow rounded-lg">
+                                <div class="px-4 py-5 sm:p-6">
+                                    <h2 class="text-2xl font-semibold text-gray-900 mb-6">Company Profile</h2>
+                                    
+                                    <div id="companyMessage" class="hidden rounded-md p-4 mb-6"></div>
+
+                                    <form id="companyForm" action="api/profiles.php?action=save_employer" method="POST" class="space-y-6">
+                                        <input type="hidden" id="csrf_token_company" name="csrf_token" value="">
+                                        <input type="hidden" id="contact_first_name" name="first_name" value="">
+                                        <input type="hidden" id="contact_last_name" name="last_name" value="">
+                                        <input type="hidden" id="contact_email" name="email" value="">
+
+                                        <!-- Company Logo -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
+                                            <div class="flex items-center space-x-6">
+                                                <div id="logoPreview" class="flex-shrink-0 h-24 w-24 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-gray-200 border-dashed">
+                                                    <i class="bi bi-building text-3xl text-gray-400"></i>
+                                                </div>
+                                                <label for="logoInput" class="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                    <i class="bi bi-cloud-upload mr-2"></i>
+                                                    Upload Logo
+                                                </label>
+                                                <input type="file" id="logoInput" accept="image/*" class="hidden">
+                                            </div>
+                                        </div>
+
+                                        <!-- Company Details -->
+                                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                            <div>
+                                                <label for="compName" class="block text-sm font-medium text-gray-700">Company Name *</label>
+                                                <input type="text" id="compName" name="company_name" placeholder="Enter your company name" required
+                                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            </div>
+
+                                            <div>
+                                                <label for="compIndustry" class="block text-sm font-medium text-gray-700">Industry *</label>
+                                                <input type="text" id="compIndustry" name="industry" placeholder="e.g. Software Development" required
+                                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            </div>
+
+                                            <div>
+                                                <label for="compLocation" class="block text-sm font-medium text-gray-700">Location *</label>
+                                                <input type="text" id="compLocation" name="location" placeholder="e.g. Manila, Philippines" required
+                                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            </div>
+
+                                            <div>
+                                                <label for="compWebsite" class="block text-sm font-medium text-gray-700">Website</label>
+                                                <input type="url" id="compWebsite" name="website_url" placeholder="https://yourcompany.com"
+                                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label for="compDesc" class="block text-sm font-medium text-gray-700">Company Description *</label>
+                                            <textarea id="compDesc" name="company_description" rows="5" required
+                                                      placeholder="Describe your company, mission, and values..."
+                                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"></textarea>
+                                        </div>
+
+                                        <div class="pt-5">
+                                            <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                Save Changes
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
                             </div>
-                            <div class="form-row">
-                                <label>Company Name *</label>
-                                <!-- Added name attributes for form data retrieval in JS -->
-                                <input type="text" id="compName" name="compName" placeholder="Enter your company name" required>
-                            </div>
-                            <div class="form-row">
-                                <label>Industry *</label>
-                                <input type="text" id="compIndustry" name="compIndustry" placeholder="e.g. Software Development" required>
-                            </div>
-                            <div class="form-row">
-                                <label>Location *</label>
-                                <input type="text" id="compLocation" name="compLocation" placeholder="e.g. Manila, Philippines" required>
-                            </div>
-                            <div class="form-row">
-                                <label>Website</label>
-                                <input type="url" id="compWebsite" name="compWebsite" placeholder="https://yourcompany.com">
-                            </div>
-                            <div class="form-row">
-                                <label>Company Description *</label>
-                                <textarea id="compDesc" name="compDesc" placeholder="Describe your company, mission, and values..."
-                                    required rows="5"></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Save Changes</button>
-                        </form>
-                    </div>
+                        </div>
 
                     <!-- Post Job Page -->
-                    <div id="postjobPage" class="page">
-                        <h2>Post a New Job</h2>
-                        <div id="jobMessage" class="message hidden"></div>
-                        <form id="postJobForm" class="job-form">
-                            <div class="form-row">
-                                <label>Job Title *</label>
-                                <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g. Web Developer" required>
-                            </div>
-                            <div class="form-row">
-                                <label>Job Description *</label>
-                                <textarea id="jobDesc" name="jobDesc"
-                                    placeholder="Describe the responsibilities, skills, and expectations..." required
-                                    rows="4"></textarea>
-                            </div>
-                            <div class="form-row">
-                                <label>Requirements *</label>
-                                <textarea id="jobReq" name="jobReq"
-                                    placeholder="List the required skills, qualifications, and experience..." required
-                                    rows="3"></textarea>
-                            </div>
-                            <div class="form-row two-columns">
-                                <div>
-                                    <label>Salary Range *</label>
-                                    <input type="text" id="jobSalary" name="jobSalary" placeholder="e.g. ₱40,000 - ₱60,000 / month"
-                                        required>
-                                </div>
-                                <div>
-                                    <label>Location *</label>
-                                    <input type="text" id="jobLocation" name="jobLocation" placeholder="e.g. Manila, Remote" required>
-                                </div>
-                            </div>
-                            <div class="form-row two-columns">
-                                <div>
-                                    <label>Job Type *</label>
-                                    <select id="jobType" name="jobType" required>
-                                        <option value="">Select Job Type</option>
-                                        <option value="full_time">Full-time</option>
-                                        <option value="part_time">Part-time</option>
-                                        <option value="contract">Contract</option>
-                                        <option value="remote">Remote</option>
-                                        <option value="hybrid">Hybrid</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label>Schedule</label>
-                                    <input type="text" id="jobSchedule" name="jobSchedule" placeholder="e.g. Monday-Friday, 9AM-6PM">
-                                </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">Post Job</button>
-                                <button type="reset" class="btn btn-secondary">Clear Form</button>
-                            </div>
-                        </form>
+                    <div id="postjobPage" class="page hidden">
+                        <div class="bg-white shadow rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-semibold text-gray-900 mb-6">Post a New Job</h2>
+                                <div id="jobMessage" class="hidden rounded-md p-4 mb-6"></div>
 
-                        <h3 style="margin-top: 30px;">Your Posted Jobs</h3>
-                        <div class="jobs-list" id="jobsList">
-                            <div class="empty-state">
-                                <i class="bi bi-briefcase"></i>
-                                <p>No jobs posted yet.</p>
+                                <form id="postJobForm" class="space-y-6">
+                                    <div>
+                                        <label for="jobTitle" class="block text-sm font-medium text-gray-700">Job Title *</label>
+                                        <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g. Web Developer" required
+                                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                    </div>
+
+                                    <div>
+                                        <label for="jobDesc" class="block text-sm font-medium text-gray-700">Job Description *</label>
+                                        <textarea id="jobDesc" name="jobDesc" rows="4" required
+                                                  placeholder="Describe the responsibilities, skills, and expectations..."
+                                                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label for="jobReq" class="block text-sm font-medium text-gray-700">Requirements *</label>
+                                        <textarea id="jobReq" name="jobReq" rows="3" required
+                                                  placeholder="List the required skills, qualifications, and experience..."
+                                                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"></textarea>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                        <div>
+                                            <label for="jobSalary" class="block text-sm font-medium text-gray-700">Salary Range *</label>
+                                            <input type="text" id="jobSalary" name="jobSalary" placeholder="e.g. ₱40,000 - ₱60,000 / month" required
+                                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                        </div>
+
+                                        <div>
+                                            <label for="jobLocation" class="block text-sm font-medium text-gray-700">Location *</label>
+                                            <input type="text" id="jobLocation" name="jobLocation" placeholder="e.g. Manila, Remote" required
+                                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                        </div>
+
+                                        <div>
+                                            <label for="jobType" class="block text-sm font-medium text-gray-700">Job Type *</label>
+                                            <select id="jobType" name="jobType" required
+                                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                                <option value="">Select Job Type</option>
+                                                <option value="full_time">Full-time</option>
+                                                <option value="part_time">Part-time</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="remote">Remote</option>
+                                                <option value="hybrid">Hybrid</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label for="jobSchedule" class="block text-sm font-medium text-gray-700">Schedule</label>
+                                            <input type="text" id="jobSchedule" name="jobSchedule" placeholder="e.g. Monday-Friday, 9AM-6PM"
+                                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-end space-x-3">
+                                        <button type="reset"
+                                                class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                            Clear Form
+                                        </button>
+                                        <button type="submit"
+                                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                            Post Job
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="mt-8">
+                            <h3 class="text-xl font-semibold text-gray-900 mb-6">Your Posted Jobs</h3>
+                            <div id="jobsList" class="space-y-6">
+                                <div class="empty-state text-center py-12">
+                                    <i class="bi bi-briefcase text-4xl text-gray-400"></i>
+                                    <p class="mt-2 text-sm text-gray-500">No jobs posted yet.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Applications Page -->
-                    <div id="applicationsPage" class="page">
-                        <h2>Job Applications</h2>
-                        <div class="applications-container">
-                            <div class="folder">
-                                <div class="folder-head">
-                                    <div class="folder-title">Web Developer Position</div>
-                                    <div class="folder-count">3 applications</div>
+                    <div id="applicationsPage" class="page hidden">
+                        <div class="space-y-6">
+                            <div class="bg-white shadow rounded-lg overflow-hidden">
+                                <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+                                    <div class="flex justify-between items-center">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900">Web Developer Position</h3>
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                                            3 applications
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="folder-body">
-                                    <div class="applicant">
-                                        <div class="app-left">
-                                            <div class="app-name">Maria Santos</div>
-                                            <div class="app-email">maria@email.com</div>
-                                            <div class="status pending">Pending Review</div>
-                                        </div>
-                                        <div class="app-actions">
-                                            <button class="btn btn-primary btn-sm">View Resume</button>
-                                            <button class="btn btn-secondary btn-sm">Contact</button>
+
+                                <div class="divide-y divide-gray-200">
+                                    <div class="px-4 py-5 sm:px-6">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <h4 class="text-sm font-medium text-gray-900">Maria Santos</h4>
+                                                <p class="text-sm text-gray-500">maria@email.com</p>
+                                                <span class="inline-flex mt-2 items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                    Pending Review
+                                                </span>
+                                            </div>
+                                            <div class="flex space-x-3">
+                                                <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                    View Resume
+                                                </button>
+                                                <button class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                    Contact
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -182,23 +298,52 @@
                     </div>
 
                     <!-- Posted Jobs Page -->
-                    <div id="postedPage" class="page">
-                        <h2>Your Posted Jobs</h2>
-                        <div class="jobs-list">
-                            <div class="job-item">
-                                <div class="job-header">
-                                    <h4>Web Developer</h4>
-                                    <span class="job-status active">Active</span>
-                                </div>
-                                <div class="job-details">
-                                    <span><i class="bi bi-geo-alt"></i> Manila</span>
-                                    <span><i class="bi bi-cash"></i> ₱40,000 - ₱60,000</span>
-                                    <span><i class="bi bi-clock"></i> Full-time</span>
-                                </div>
-                                <div class="job-actions">
-                                    <button class="btn btn-primary btn-sm">View Applications (3)</button>
-                                    <button class="btn btn-secondary btn-sm">Edit</button>
-                                    <button class="btn btn-danger btn-sm">Delete</button>
+                    <div id="postedPage" class="page hidden">
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <div class="px-4 py-5 sm:px-6">
+                                <h2 class="text-2xl font-semibold text-gray-900">Your Posted Jobs</h2>
+                            </div>
+
+                            <div class="border-t border-gray-200">
+                                <div class="px-4 py-5 sm:px-6">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                                        <div class="mb-4 sm:mb-0">
+                                            <h3 class="text-lg font-medium text-gray-900">Web Developer</h3>
+                                            <span class="inline-flex mt-2 items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Active
+                                            </span>
+                                        </div>
+
+                                        <div class="flex flex-wrap gap-3">
+                                            <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                View Applications (3)
+                                            </button>
+                                            <button class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                                Edit
+                                            </button>
+                                            <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                        <div class="sm:col-span-1">
+                                            <span class="inline-flex items-center text-sm text-gray-500">
+                                                <i class="bi bi-geo-alt mr-1.5"></i> Manila
+                                            </span>
+                                        </div>
+                                        <div class="sm:col-span-1">
+                                            <span class="inline-flex items-center text-sm text-gray-500">
+                                                <i class="bi bi-cash mr-1.5"></i> ₱40,000 - ₱60,000
+                                            </span>
+                                        </div>
+                                        <div class="sm:col-span-1">
+                                            <span class="inline-flex items-center text-sm text-gray-500">
+                                                <i class="bi bi-clock mr-1.5"></i> Full-time
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -208,18 +353,49 @@
         </div>
 
         <!-- Notification Modal -->
-        <div class="modal-overlay" id="notifModal" aria-hidden="true">
-            <div class="modal" role="dialog" aria-labelledby="notifModalTitle">
-                <button class="icon-btn close-modal" aria-label="Close dialog">&times;</button>
-                <h3 id="notifModalTitle">Notifications</h3>
-                <div class="modal-body">
-                    <div class="notification-item">
-                        <p>New application for Web Developer position</p>
-                        <span class="notification-time">2 hours ago</span>
+        <div class="relative z-50" id="notifModal" aria-labelledby="modal-title" role="dialog" aria-modal="true" aria-hidden="true">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+            <div class="fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                    <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                        <div class="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
+                            <button type="button" class="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2" aria-label="Close dialog">
+                                <span class="sr-only">Close</span>
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <i class="bi bi-bell text-primary-600"></i>
+                            </div>
+                            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">
+                                    Notifications
+                                </h3>
+                                <div class="mt-4">
+                                    <div class="divide-y divide-gray-200">
+                                        <div class="py-4">
+                                            <div class="flex justify-between">
+                                                <p class="text-sm text-gray-900">New application for Web Developer position</p>
+                                                <span class="ml-2 flex-shrink-0 text-sm text-gray-500">2 hours ago</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                            <button type="button" id="markAllRead"
+                                    class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">
+                                Mark all as read
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" id="markAllRead">Mark all as read</button>
                 </div>
             </div>
         </div>

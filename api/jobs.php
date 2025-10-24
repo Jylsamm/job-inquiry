@@ -105,6 +105,9 @@ switch ($method) {
                     }
                     
                     $stmt = $conn->prepare("INSERT IGNORE INTO job_saved (job_seeker_id, job_id) VALUES (?, ?)");
+                    if ($stmt === false) {
+                        jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+                    }
                     $stmt->bind_param("ii", $job_seeker_id, $input['job_id']);
                     
                     if ($stmt->execute()) {
@@ -142,6 +145,9 @@ switch ($method) {
                             salary_min, salary_max, job_type, experience_level, location, status
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')
                     ");
+                        if ($stmt === false) {
+                            jsonResponse(false, 'Internal server error (DB prepare failed)', null, 500);
+                        }
                     
                     $stmt->bind_param("iissssssss", 
                         $employer_id, 

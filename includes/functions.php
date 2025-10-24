@@ -11,8 +11,8 @@ require_once 'config.php';
  */
 function getJobCategories() {
     $conn = getDBConnection();
-    $stmt = $conn->prepare("SELECT category_id, category_name FROM job_category WHERE is_active = TRUE ORDER BY category_name");
-    $stmt->execute();
+        $stmt = db_prepare_or_error($conn, "SELECT category_id, category_name FROM job_category WHERE is_active = TRUE ORDER BY category_name");
+        $stmt->execute();
     $result = $stmt->get_result();
     
     $categories = [];
@@ -30,18 +30,18 @@ function getJobCategories() {
  */
 function getFeaturedJobs($limit = 10) {
     $conn = getDBConnection();
-    $stmt = $conn->prepare("
-        SELECT j.job_id, j.job_title, j.job_description, j.location, j.salary_min, j.salary_max, 
-               j.job_type, j.created_at, e.company_name, c.category_name
-        FROM job j
-        JOIN employer e ON j.employer_id = e.employer_id
-        JOIN job_category c ON j.category_id = c.category_id
-        WHERE j.status = 'published' AND j.application_deadline >= CURDATE()
-        ORDER BY j.created_at DESC
-        LIMIT ?
-    ");
-    $stmt->bind_param("i", $limit);
-    $stmt->execute();
+        $stmt = db_prepare_or_error($conn, "
+            SELECT j.job_id, j.job_title, j.job_description, j.location, j.salary_min, j.salary_max, 
+                   j.job_type, j.created_at, e.company_name, c.category_name
+            FROM job j
+            JOIN employer e ON j.employer_id = e.employer_id
+            JOIN job_category c ON j.category_id = c.category_id
+            WHERE j.status = 'published' AND j.application_deadline >= CURDATE()
+            ORDER BY j.created_at DESC
+            LIMIT ?
+        ");
+        $stmt->bind_param("i", $limit);
+        $stmt->execute();
     
     $result = $stmt->get_result();
     $jobs = [];
@@ -138,13 +138,13 @@ function searchJobs($filters) {
         LIMIT 50
     ";
     
-    $stmt = $conn->prepare($sql);
+        $stmt = db_prepare_or_error($conn, $sql);
     
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
     
-    $stmt->execute();
+        $stmt->execute();
     $result = $stmt->get_result();
     
     $jobs = [];
@@ -208,9 +208,9 @@ function applyForJob($job_id, $job_seeker_id, $application_data) {
     $conn = getDBConnection();
     
     // Check if already applied
-    $checkStmt = $conn->prepare("SELECT application_id FROM application WHERE job_id = ? AND job_seeker_id = ?");
-    $checkStmt->bind_param("ii", $job_id, $job_seeker_id);
-    $checkStmt->execute();
+        $checkStmt = db_prepare_or_error($conn, "SELECT application_id FROM application WHERE job_id = ? AND job_seeker_id = ?");
+        $checkStmt->bind_param("ii", $job_id, $job_seeker_id);
+        $checkStmt->execute();
     
     if ($checkStmt->get_result()->num_rows > 0) {
         return ['success' => false, 'message' => 'You have already applied for this job.'];
@@ -502,7 +502,7 @@ function uploadProfilePicture($file, $user_id) {
         // Update database with relative path
         $relative_path = '/job-inquiry/uploads/profiles/' . $filename;
         $conn = getDBConnection();
-    $stmt = $conn->prepare("UPDATE user SET profile_picture = ? WHERE user_id = ?");
+            $stmt = db_prepare_or_error($conn, "UPDATE user SET profile_picture = ? WHERE user_id = ?");
         $stmt->bind_param("si", $relative_path, $user_id);
         
         if ($stmt->execute()) {
@@ -577,7 +577,7 @@ function uploadCompanyLogo($file, $employer_id) {
  * @param int $current_user_id
  * @return array
  */
-function validateEmail($email, $current_user_id = null) {
+function validateEmailUnique($email, $current_user_id = null) {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return ['valid' => false, 'message' => 'Please enter a valid email address.'];
     }
@@ -586,11 +586,11 @@ function validateEmail($email, $current_user_id = null) {
     
     if ($current_user_id) {
         // Check if email exists for other users (for profile updates)
-    $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ? AND user_id != ?");
+        $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ? AND user_id != ?");
         $stmt->bind_param("si", $email, $current_user_id);
     } else {
         // Check if email exists (for registration)
-    $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ?");
+        $stmt = $conn->prepare("SELECT user_id FROM user WHERE email = ?");
         $stmt->bind_param("s", $email);
     }
     

@@ -1,7 +1,13 @@
-// WorkConnect PH - Configuration for PHP Backend
+// WorkConnect PH - Enhanced Configuration
 const CONFIG = {
-    API_BASE: window.location.origin + '/job-inquiry/api',
-    DEBUG: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
+    // API Configuration
+    API: {
+        BASE_URL: window.location.origin + '/job-inquiry/api',
+        TIMEOUT: 30000, // 30 seconds
+        RETRY_ATTEMPTS: 3,
+        RETRY_DELAY: 1000, // 1 second
+        DEBUG: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    },
 
     // API Endpoints
     ENDPOINTS: {
@@ -9,7 +15,10 @@ const CONFIG = {
             LOGIN: 'auth.php?action=login',
             REGISTER: 'auth.php?action=register',
             LOGOUT: 'auth.php?action=logout',
-            CHECK: 'auth.php?action=check'
+            CHECK: 'auth.php?action=check',
+            FORGOT_PASSWORD: 'auth.php?action=forgot_password',
+            RESET_PASSWORD: 'auth.php?action=reset_password',
+            VERIFY_EMAIL: 'auth.php?action=verify_email'
         },
         JOBS: {
             FEATURED: 'jobs.php?action=featured',
@@ -17,11 +26,22 @@ const CONFIG = {
             DETAILS: 'jobs.php?action=details',
             CATEGORIES: 'jobs.php?action=categories',
             APPLY: 'jobs.php?action=apply',
-            SAVE: 'jobs.php?action=save'
+            SAVE: 'jobs.php?action=save',
+            CREATE: 'jobs.php?action=create',
+            UPDATE: 'jobs.php?action=update',
+            DELETE: 'jobs.php?action=delete'
         },
         APPLICATIONS: {
             MY_APPLICATIONS: 'applications.php?action=my_applications',
-            EMPLOYER_APPLICATIONS: 'applications.php?action=employer_applications'
+            EMPLOYER_APPLICATIONS: 'applications.php?action=employer_applications',
+            UPDATE_STATUS: 'applications.php?action=update_status',
+            WITHDRAW: 'applications.php?action=withdraw'
+        },
+        PROFILES: {
+            GET: 'profiles.php?action=get',
+            UPDATE: 'profiles.php?action=update',
+            UPLOAD_RESUME: 'profiles.php?action=upload_resume',
+            UPLOAD_AVATAR: 'profiles.php?action=upload_avatar'
         }
     },
 
@@ -46,6 +66,9 @@ const CONFIG = {
         'withdrawn': 'Withdrawn'
     }
 };
+
+// Backwards-compatible alias used by some modules
+CONFIG.API_BASE = CONFIG.API.BASE_URL;
 
 // Utility functions
 const Utils = {

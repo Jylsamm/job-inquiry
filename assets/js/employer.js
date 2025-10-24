@@ -70,10 +70,68 @@ document.addEventListener('DOMContentLoaded', async function () {
     const companyMessage = document.getElementById('companyMessage');
 
     if (companyForm) {
+        // Populate CSRF token from meta tag
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfInputCompany = document.getElementById('csrf_token_company');
+        if (csrfMeta && csrfInputCompany) csrfInputCompany.value = csrfMeta.getAttribute('content');
+
+        // Prefill company and contact fields by fetching employer profile
+        (async function prefillEmployerProfile(){
+            try {
+                const resp = await apiCall('profiles.php?action=employer_profile', {}, 'GET');
+                if (resp.success && resp.data) {
+                    const data = resp.data;
+                    document.getElementById('compName').value = data.company_name || '';
+                    document.getElementById('compIndustry').value = data.industry || '';
+                    document.getElementById('compLocation').value = data.website_url || '';
+                    document.getElementById('compWebsite').value = data.website_url || '';
+                    document.getElementById('compDesc').value = data.company_description || '';
+
+                    // Populate hidden contact fields if available
+                    document.getElementById('contact_first_name').value = data.first_name || '';
+                    document.getElementById('contact_last_name').value = data.last_name || '';
+                    document.getElementById('contact_email').value = data.email || '';
+                }
+            } catch (err) {
+                console.warn('Could not prefill employer profile:', err);
+            }
+        })();
+
         companyForm.addEventListener('submit', async function (e) {
             e.preventDefault();
-            // In a real application, you'd integrate the company profile form here.
-            showNotification('Company profile update simulated. API integration pending.', 'info');
+
+            const csrfToken = document.getElementById('csrf_token_company').value;
+            const payload = {
+                csrf_token: csrfToken,
+                first_name: document.getElementById('contact_first_name').value || '',
+                last_name: document.getElementById('contact_last_name').value || '',
+                email: document.getElementById('contact_email').value || '',
+                company_name: document.getElementById('compName').value,
+                company_description: document.getElementById('compDesc').value,
+                industry: document.getElementById('compIndustry').value,
+                website_url: document.getElementById('compWebsite').value,
+                location: document.getElementById('compLocation').value
+            };
+
+            // Basic validation
+            if (!payload.company_name || !payload.company_description) {
+                Utils.showMessage(companyMessage, 'Please fill in required company fields', 'error');
+                return;
+            }
+
+            Utils.showMessage(companyMessage, '🔄 Saving company profile...', 'info');
+
+            try {
+                const response = await apiCall('profiles.php?action=save_employer', payload, 'PUT');
+                if (response.success) {
+                    Utils.showMessage(companyMessage, '✅ Company profile updated successfully!', 'success');
+                } else {
+                    Utils.showMessage(companyMessage, `❌ ${response.message}`, 'error');
+                }
+            } catch (err) {
+                console.error('Error saving company profile:', err);
+                Utils.showMessage(companyMessage, '❌ Network error while saving company profile.', 'error');
+            }
         });
     }
 

@@ -234,19 +234,89 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Profile form (using existing simulation logic)
     const profileForm = document.getElementById('profileForm');
     if (profileForm) {
-        profileForm.addEventListener('submit', function (e) {
+        // Populate CSRF token from meta tag for forms
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfInput = document.getElementById('csrf_token_profile');
+        if (csrfMeta && csrfInput) csrfInput.value = csrfMeta.getAttribute('content');
+
+        profileForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
-            // In a real app, you would save the profile data via API
-            const formData = new FormData(profileForm);
-            const profileData = {
-                name: document.getElementById('profileName').value,
-                email: document.getElementById('profileEmail').value,
-                skills: document.getElementById('profileSkills').value
+            const firstName = document.getElementById('profileFirstName').value.trim();
+            const lastName = document.getElementById('profileLastName').value.trim();
+            const email = document.getElementById('profileEmail').value.trim();
+            const skills = document.getElementById('profileSkills').value.trim();
+            const csrfToken = document.getElementById('csrf_token_profile').value;
+
+            // Basic validation
+            if (!firstName || !lastName || !email) {
+                showNotification('Please fill in your name and email.', 'error');
+                return;
+            }
+
+            // Upload files first if present (profile picture and resume)
+            try {
+                // Profile picture
+                const profileFileInput = document.getElementById('profileInput');
+                if (profileFileInput && profileFileInput.files && profileFileInput.files.length > 0) {
+                    const fd = new FormData();
+                    fd.append('profile_picture', profileFileInput.files[0]);
+                    fd.append('csrf_token', csrfToken);
+                    fd.append('action', 'upload_profile_picture');
+                    // Prefer modern apiService if available, otherwise fallback to fetch
+                    if (window.apiService && typeof window.apiService.upload === 'function') {
+                        await window.apiService.upload('upload.php?action=upload_profile_picture', fd);
+                    } else {
+                        // Legacy fallback: multipart POST to api/upload.php?action=upload_profile_picture
+                        const res = await fetch('api/upload.php?action=upload_profile_picture', {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: fd
+                        });
+                        const j = await res.json();
+                        if (!res.ok || !j.success) throw new Error(j.message || 'Upload failed');
+                    }
+                }
+
+                // Resume
+                const resumeInput = document.getElementById('resumeUpload');
+                if (resumeInput && resumeInput.files && resumeInput.files.length > 0) {
+                    const fd2 = new FormData();
+                    fd2.append('resume', resumeInput.files[0]);
+                    fd2.append('csrf_token', csrfToken);
+                    fd2.append('action', 'upload_resume');
+                    // There is currently no dedicated resume upload handler in API/upload.php; keep this as placeholder
+                    // await apiService.upload('upload.php?action=upload_resume', fd2);
+                }
+            } catch (err) {
+                console.error('File upload error:', err);
+                showNotification('File upload failed. Profile not saved.', 'error');
+                return;
+            }
+
+            // Now save profile via API (PUT)
+            const payload = {
+                csrf_token: csrfToken,
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+                skills: skills
             };
 
-            console.log('Saving profile:', profileData);
-            showNotification('Profile updated successfully!', 'success');
+            try {
+                showLoading();
+                const response = await apiCall('profiles.php?action=save_job_seeker', payload, 'PUT');
+                hideLoading();
+                if (response.success) {
+                    showNotification('Profile updated successfully!', 'success');
+                } else {
+                    showNotification(response.message || 'Failed to update profile.', 'error');
+                }
+            } catch (err) {
+                hideLoading();
+                console.error('Profile save error:', err);
+                showNotification('Network error while saving profile.', 'error');
+            }
         });
     }
 

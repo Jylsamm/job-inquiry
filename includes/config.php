@@ -114,6 +114,27 @@ function getDBConnection() {
 }
 
 /**
+ * Safe prepare wrapper — returns mysqli_stmt or returns JSON error for API callers
+ */
+function db_prepare_or_error($conn, $sql) {
+    $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        error_log('DB prepare failed: ' . $conn->error . ' SQL: ' . $sql);
+        // If this is an API call, respond with JSON
+        $is_api_call = isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/api/') !== false;
+        if ($is_api_call) {
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Internal server error']);
+            exit;
+        }
+        // Otherwise throw exception
+        throw new Exception('Database prepare failed: ' . $conn->error);
+    }
+    return $stmt;
+}
+
+/**
  * CSRF Token Generation and Validation
  */
 function generateCsrfToken() {
@@ -212,7 +233,7 @@ function getCurrentJobSeekerId() {
     if (!isLoggedIn() || getCurrentUserRole() !== 'job_seeker') return null;
     
     $conn = getDBConnection();
-    $stmt = $conn->prepare("SELECT job_seeker_id FROM job_seeker WHERE user_id = ?");
+    $stmt = db_prepare_or_error($conn, "SELECT job_seeker_id FROM job_seeker WHERE user_id = ?");
     $stmt->bind_param("i", getCurrentUserId());
     $stmt->execute();
     $result = $stmt->get_result();
@@ -224,7 +245,7 @@ function getCurrentEmployerId() {
     if (!isLoggedIn() || getCurrentUserRole() !== 'employer') return null;
     
     $conn = getDBConnection();
-    $stmt = $conn->prepare("SELECT employer_id FROM employer WHERE user_id = ?");
+    $stmt = db_prepare_or_error($conn, "SELECT employer_id FROM employer WHERE user_id = ?");
     $stmt->bind_param("i", getCurrentUserId());
     $stmt->execute();
     $result = $stmt->get_result();
